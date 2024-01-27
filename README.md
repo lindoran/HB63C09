@@ -5,6 +5,7 @@ This is the repository of the HB63C09 Home brew computer.
 This is a HD63C09 based system built on the ITX form factor.
 
 Not much is here right now, but currently working on updating the firmware to get support for SD cards as well as I2C.
+once the firmware is in a stable state I will release the project construction files so anybody can try out the design
 
 You can find more details at: 
 https://hackaday.io/project/186398-hb6809-homebrew-computer
