@@ -9,6 +9,8 @@ once the firmware is in a stable state I will release the project construction f
 
 You can find more details at: 
 https://hackaday.io/project/186398-hb6809-homebrew-computer
+-and- 
+https://www.hackster.io/z80dad/hb63c09m-mini-itx-hd63c09-avr-based-homebrew-computer-34904b
 
 Addtionally this project is sponsored by PCBWay.com 
 PCBWay handles all the prototyping costs for the HB63C09
