@@ -7,6 +7,10 @@ This is a HD63C09 based system built on the ITX form factor.
 Not much is here right now, but currently working on updating the firmware to get support for SD cards as well as I2C.
 once the firmware is in a stable state I will release the project construction files so anybody can try out the design
 
+The Sketch in the Arduino directory is often in a unworking state.
+when I get to where its more complete I will release a stable branch, for now think of this as the DEVEL branch all the time.
+
+
 You can find more details at: 
 https://hackaday.io/project/186398-hb6809-homebrew-computer
 -and- 
@@ -19,6 +23,12 @@ Please check out their website for PCB Fabrication, CNC Mechineing and 3D Printi
 Thank you PCBWay!
 
 PCB and hardware under the CERN-OHL-P V2 Licence
-Software under the MIT Licence or where otherwise indicated in the subfolder you are looking at.
+
+Software is under the GPL 3.0 Licence, Libraries and addtional attribution can be found in the "attribution"
+folder under a specific folder, where they can not also be called out inline.
+
+This Repository uses the floppy emulation code from the Z80-MBC2 Project by Fabio Defabis
+this code is slightly modified to fit the differing architecutre, however the original code
+is (C) Fabio Defabis under the terms of the GPL.
 
 (C) 2024 David Collins
