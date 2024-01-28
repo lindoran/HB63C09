@@ -1,30 +1,46 @@
 // This is very rough - be advised 
 
 /*
- * MIT License
+HB63C09 Sketch is (C) David Collins under the terms of the GPL 3.0 (see repo)
+https://github.com/lindoran/HB63C09
 
-Copyright (c) 2024 Dave Collins
+Attribution: 
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+IOS/Z80-MBC Code for Floppy emulation is (C) Fabio Defabis under the GPL 3.0
+In line call outs within the code specify where this is the case.
+Details for the Z80-MBC2 project are: 
+https://github.com/SuperFabius/Z80-MBC2
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+SD library from: https://github.com/greiman/PetitFS (based on 
+PetitFS: http://elm-chan.org/fsw/ff/00index_p.html)
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
- */
+PetitFS licence:
+/-----------------------------------------------------------------------------/
+/  Petit FatFs - FAT file system module  R0.03                  (C)ChaN, 2014
+/-----------------------------------------------------------------------------/
+/ Petit FatFs module is a generic FAT file system module for small embedded
+/ systems. This is a free software that opened for education, research and
+/ commercial developments under license policy of following trems.
+/
+/  Copyright (C) 2014, ChaN, all right reserved.
+/
+/ * The Petit FatFs module is a free software and there is NO WARRANTY.
+/ * No restriction on use. You can use, modify and redistribute it for
+/   personal, non-profit or commercial products UNDER YOUR RESPONSIBILITY.
+/ * Redistributions of source code must retain the above copyright notice.
+/
+/-----------------------------------------------------------------------------/
 
-// This is a test
+***Thank you*** 
+
+Grant Searle, Jeff Tranter, Fabio Defabis, and Brad Rodreguez for their 
+inspiring designs for without which none of this would be possibe. 
+
+Thank you to PCBWay.Com for sponsoring the physical prototypes which were used
+to develop this system see their website at http://pcbway.com
+
+*/
+
 
 #include <stdint.h>
 
@@ -244,4 +260,188 @@ void busIO(void) {
       bitClear(PORTD, iognt_);  
       bitSet(PORTD, iognt_);
       busTstate(); // this just makes sure we are ready to read on the next go-through.
+}
+
+// ------------------------------------------------------------------------------
+
+// SD Disk routines (FAT16 and FAT32 filesystems supported) using the PetitFS library.
+// For more info about PetitFS see here: http://elm-chan.org/fsw/ff/00index_p.html
+
+// ------------------------------------------------------------------------------
+
+
+byte mountSD(FATFS* fatFs)
+// Mount a volume on SD: 
+// *  "fatFs" is a pointer to a FATFS object (PetitFS library)
+// The returned value is the resulting status (0 = ok, otherwise see printErrSD())
+{
+  return pf_mount(fatFs);
+}
+
+// ------------------------------------------------------------------------------
+
+byte openSD(const char* fileName)
+// Open an existing file on SD:
+// *  "fileName" is the pointer to the string holding the file name (8.3 format)
+// The returned value is the resulting status (0 = ok, otherwise see printErrSD())
+{
+  return pf_open(fileName);
+}
+
+// ------------------------------------------------------------------------------
+
+byte readSD(void* buffSD, byte* numReadBytes)
+// Read one "segment" (32 bytes) starting from the current sector (512 bytes) of the opened file on SD:
+// *  "BuffSD" is the pointer to the segment buffer;
+// *  "numReadBytes" is the pointer to the variables that store the number of read bytes;
+//     if < 32 (including = 0) an EOF was reached).
+// The returned value is the resulting status (0 = ok, otherwise see printErrSD())
+//
+// NOTE1: Each SD sector (512 bytes) is divided into 16 segments (32 bytes each); to read a sector you need to
+//        to call readSD() 16 times consecutively
+//
+// NOTE2: Past current sector boundary, the next sector will be pointed. So to read a whole file it is sufficient 
+//        call readSD() consecutively until EOF is reached
+{
+  UINT  numBytes;
+  byte  errcode;
+  errcode = pf_read(buffSD, 32, &numBytes);
+  *numReadBytes = (byte) numBytes;
+  return errcode;
+}
+
+// ------------------------------------------------------------------------------
+
+byte writeSD(void* buffSD, byte* numWrittenBytes)
+// Write one "segment" (32 bytes) starting from the current sector (512 bytes) of the opened file on SD:
+// *  "BuffSD" is the pointer to the segment buffer;
+// *  "numWrittenBytes" is the pointer to the variables that store the number of written bytes;
+//     if < 32 (including = 0) an EOF was reached.
+// The returned value is the resulting status (0 = ok, otherwise see printErrSD())
+//
+// NOTE1: Each SD sector (512 bytes) is divided into 16 segments (32 bytes each); to write a sector you need to
+//        to call writeSD() 16 times consecutively
+//
+// NOTE2: Past current sector boundary, the next sector will be pointed. So to write a whole file it is sufficient 
+//        call writeSD() consecutively until EOF is reached
+//
+// NOTE3: To finalize the current write operation a writeSD(NULL, &numWrittenBytes) must be called as last action
+{
+  UINT  numBytes;
+  byte  errcode;
+  if (buffSD != NULL)
+  {
+    errcode = pf_write(buffSD, 32, &numBytes);
+  }
+  else
+  {
+    errcode = pf_write(0, 0, &numBytes);
+  }
+  *numWrittenBytes = (byte) numBytes;
+  return errcode;
+}
+
+// ------------------------------------------------------------------------------
+
+byte seekSD(word sectNum)
+// Set the pointer of the current sector for the current opened file on SD:
+// *  "sectNum" is the sector number to set. First sector is 0.
+// The returned value is the resulting status (0 = ok, otherwise see printErrSD())
+//
+// NOTE: "secNum" is in the range [0..16383], and the sector addressing is continuos inside a "disk file";
+//       16383 = (512 * 32) - 1, where 512 is the number of emulated tracks, 32 is the number of emulated sectors
+//
+{
+  byte i;
+  return pf_lseek(((unsigned long) sectNum) << 9);
+}
+
+// ------------------------------------------------------------------------------
+
+void printErrSD(byte opType, byte errCode, const char* fileName)
+// Print the error occurred during a SD I/O operation:
+//  * "OpType" is the operation that generated the error (0 = mount, 1= open, 2 = read,
+//     3 = write, 4 = seek);
+//  * "errCode" is the error code from the PetitFS library (0 = no error);
+//  * "fileName" is the pointer to the file name or NULL (no file name)
+//
+// ........................................................................
+//
+// Errors legend (from PetitFS library) for the implemented operations:
+//
+// ------------------
+// mountSD():
+// ------------------
+// NOT_READY
+//     The storage device could not be initialized due to a hard error or no medium.
+// DISK_ERR
+//     An error occured in the disk read function.
+// NO_FILESYSTEM
+//     There is no valid FAT partition on the drive.
+//
+// ------------------
+// openSD():
+// ------------------
+// NO_FILE
+//     Could not find the file.
+// DISK_ERR
+//     The function failed due to a hard error in the disk function, a wrong FAT structure or an internal error.
+// NOT_ENABLED
+//     The volume has not been mounted.
+//
+// ------------------
+// readSD() and writeSD():
+// ------------------
+// DISK_ERR
+//     The function failed due to a hard error in the disk function, a wrong FAT structure or an internal error.
+// NOT_OPENED
+//     The file has not been opened.
+// NOT_ENABLED
+//     The volume has not been mounted.
+// 
+// ------------------
+// seekSD():
+// ------------------
+// DISK_ERR
+//     The function failed due to an error in the disk function, a wrong FAT structure or an internal error.
+// NOT_OPENED
+//     The file has not been opened.
+//
+// ........................................................................
+{
+  if (errCode)
+  {
+    Serial.print(F("\r\nIOS: SD error "));
+    Serial.print(errCode);
+    Serial.print(" (");
+    switch (errCode)
+    // See PetitFS implementation for the codes
+    {
+      case 1: Serial.print(F("DISK_ERR")); break;
+      case 2: Serial.print(F("NOT_READY")); break;
+      case 3: Serial.print(F("NO_FILE")); break;
+      case 4: Serial.print(F("NOT_OPENED")); break;
+      case 5: Serial.print(F("NOT_ENABLED")); break;
+      case 6: Serial.print(F("NO_FILESYSTEM")); break;
+      default: Serial.print(F("UNKNOWN")); 
+    }
+    Serial.print(F(" on "));
+    switch (opType)
+    {
+      case 0: Serial.print(F("MOUNT")); break;
+      case 1: Serial.print(F("OPEN")); break;
+      case 2: Serial.print(F("READ")); break;
+      case 3: Serial.print(F("WRITE")); break;
+      case 4: Serial.print(F("SEEK")); break;
+      default: Serial.print(F("UNKNOWN"));
+    }
+    Serial.print(F(" operation"));
+    if (fileName)
+    // Not a NULL pointer, so print file name too
+    {
+      Serial.print(F(" - File: "));
+      Serial.print(fileName);
+    }
+    Serial.println(")");
+  }
 }
