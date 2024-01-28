@@ -20,6 +20,8 @@ Addtionally this project is sponsored by PCBWay.com
 PCBWay handles all the prototyping costs for the HB63C09
 Please check out their website for PCB Fabrication, CNC Mechineing and 3D Printing.
 
+http://pcbway.com
+
 Thank you PCBWay!
 
 PCB and hardware under the CERN-OHL-P V2 Licence
