@@ -43,6 +43,10 @@ to develop this system see their website at http://pcbway.com
 
 
 #include <stdint.h>
+#include <Wire.h>
+#include <EEPROM.h>
+#include "PetitFS.h"
+
 
 
 
