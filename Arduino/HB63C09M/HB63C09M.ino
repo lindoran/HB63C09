@@ -1,4 +1,6 @@
-// This is very rough - be advised 
+// This is very rough - be advised - at any time this could be broken.
+// I will implement a version control mechanic when we get ready to release REV4
+
 
 /*
 HB63C09 Sketch is (C) David Collins under the terms of the GPL 3.0 (see repo)
@@ -48,9 +50,7 @@ to develop this system see their website at http://pcbway.com
 #include "PetitFS.h"
 
 
-
-
-// PORT A IS THE AVR DATABUS
+// PORT A IS THE AVR DATABUS - this is behind a bus transceiver 
 #define  D0           0 // PA0 pin 40   
 #define  D1           1 // PA1 pin 39
 #define  D2           2 // PA2 pin 38
@@ -89,10 +89,39 @@ to develop this system see their website at http://pcbway.com
 #define  ioreq_       6 // PD6 pin 20   io request bar line
 #define  iognt_       7 // PD7 pin 21   io grant bar line
 
+// File name Defines for IOS
+
+#define   M6X09DISK     "DSxNyy.DSK"        // Generic 6x09 disk name (from DS0N00.DSK to DS9N99.DSK)
+#define   DS_OSNAME       "DSxNAM.DAT"      // File with the OS name for Disk Set "x" (from DS0NAM.DAT to DS9NAM.DAT)
+
 // Global System variables
 
-uint8_t busData = 0;    // data for current step through the loop
-uint8_t bankReg = 0;    // last value set in bank register
+uint8_t  busData = 0;                 // data for current step through the loop
+uint8_t  bankReg = 0;                 // last value set in bank register
+uint8_t  lastOp = 0;                  // last operation run (MSB = read / write bit, remaining bits are address)
+uint8_t  curOp = 0;                   // curent operation run (MSB = read /write bit, remaining bits are addres)
+uint16_t ioByteCnt;                   // Exchanged bytes counter durring an I/O operation
+uint8_t  tempByte;                    // temorary byte storage
+uint8_t  errCodeSD;                   // Temporary variable to store error codes from the PetitFS
+uint8_t  numReadBytes;                // Number of read bytes after a readSD() call
+
+
+const char *  fileNameSD;             // Pointer to the string with the currently used file name
+
+FATFS    filesysSD;                   // Filesystem object (PetitFS library)
+uint8_t  bufferSD[32];                // I/O buffer for SD disk operations (store a "segment" of a SD sector).
+uint8_t  diskName[11] = M6X09DISK;    // String used for virtual disk file name
+char     OsName[11] = DS_OSNAME;      // String used for file holding the OS name  -- TODO *** MULTIPLE OS?? ***
+uint16_t trackSel;                    // Store the current track number [0..511]
+uint8_t  sectSel;                     // Store the current sector number [0..31]
+uint8_t  diskErr = 19;                // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
+                                      //  error code
+uint8_t  numWriBytes;                 // Number of written bytes after a writeSD() call
+uint8_t  diskSet = 0;                 // Current "Disk Set"  -- TODO*** NEED TO BUILD SUPPORT FOR MULTIPLE SETS ***
+
+// constants
+const byte    maxDiskNum   = 99;          // Max number of virtual disks
+
 
 void setup() {
 Serial.begin(115200);
@@ -134,8 +163,37 @@ bitClear(DDRB, r_w);
 bitClear(DDRD, ioreq_);
 bitClear(DDRD, xsin);
 
+// mount the SD Card to initiaize Z80-MBC2 - IOS Floppy emulation 
+// see Attribuition at top
+Serial.println();  
+Serial.print("IOS: Attempting to mount SD Card");
+if (mountSD(&filesysSD))
+   // Error mounting. Try again
+   {
+     errCodeSD = mountSD(&filesysSD);
+     if (errCodeSD)
+     // Error again. Repeat until error disappears (or the user forces a reset)
+     do
+     {
+       printErrSD(0, errCodeSD, NULL);
+       waitKey();                                // Wait a key to repeat
+       mountSD(&filesysSD);                      // New double try
+       errCodeSD = mountSD(&filesysSD);
+     }
+     while (errCodeSD);
+     Serial.println("IOS: SD Card found!" 
+   }
+else Serial.println
+("...OK!");
 Serial.println();
 Serial.println("HB6809 - HB63C09M Test Build");
+
+// flush the RX buffer to clear spurius inputs due to dongle power up
+// this avoids issues displaying the incomming prompt text.
+ while (Serial.available() > 0) 
+  {
+    Serial.read();
+  }
 
 
 // Lets burn this candle! -- System coming out of reset state
@@ -151,32 +209,233 @@ bitClear(DDRB, halt_);
 
 void loop(){
   // checking for ioreq_
-  if (!(bitRead(PIND, ioreq_))) {
+  if (!(bitRead(PIND, ioreq_))) { 
       if (bitRead(PIND, xsin)) {
-        busIO();  // end early for expansion bus IO  
+        busIO();  // end early for expansion bus IO
+        ioByteCnt = 0;  // reset multi-op counter this can't be a multi step function.
       }
       else {
+       curOp = (bitRead(PINB, r_w) << 4) | a_nibble; 
+       if (!(lastOp == curOp)) ioByteCnt = 0;   // do we need to reset the multi-op counter?
        // bus write
-       if (!(bitRead(PINB, r_w))) {
+       if (!(bitRead(curOp, 4))) { // r_w value
            
            busData = busRead();    // read the waiting data from the bus.
            
-           switch (a_nibble) {
-             case 0:
+           switch (curOp & 0x0F) { // address nibble
+             case 0x00:
                //This is normally the UART control register for the 6850, since it is internally
                //configured in the AVR we don't need to store this information. but we need to 
                //leave this for legacy support of older code. 
             
               break;
              
-             case 1:
+             case 0x01:
               // send a byte to the terminal.
              
               Serial.write(busData);
-             
+
+              break;
+              
+             // begin IOS Emulation code for write, see Attribution at the top
+             case 0x02:
+              // DISK EMULATION
+              // SELDISK - select the emulated disk number (binary). 100 disks are supported [0..99]:
+              //
+              //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
+              //                            ---------------------------------------------------------
+              //                             D7 D6 D5 D4 D3 D2 D1 D0    DISK number (binary) [0..99]
+              //
+              //
+              // Opens the "disk file" correspondig to the selected disk number, doing some checks.
+              // A "disk file" is a binary file that emulates a disk using a LBA-like logical sector number.
+              // Every "disk file" must have a dimension of 8388608 bytes, corresponding to 16384 LBA-like logical sectors
+              //  (each sector is 512 bytes long), correspinding to 512 tracks of 32 sectors each (see SELTRACK and
+              //  SELSECT Opcodes).
+              // Errors are stored into "errDisk" (see ERRDISK Opcode).
+              //
+              //
+              // ...........................................................................................
+              //
+              // "Disk file" filename convention:
+              //
+              // Every "disk file" must follow the sintax "DSsNnn.DSK" where
+              //
+              //    "s" is the "disk set" and must be in the [0..9] range (always one numeric ASCII character)
+              //    "nn" is the "disk number" and must be in the [00..99] range (always two numeric ASCII characters)
+              //
+              // ...........................................................................................
+              //
+              //
+              // NOTE 1: The maximum disks number may be lower due the limitations of the used OS (e.g. CP/M 2.2 supports
+              //         a maximum of 16 disks)
+              // NOTE 2: Because SELDISK opens the "disk file" used for disk emulation, before using WRITESECT or READSECT
+              //         a SELDISK must be performed at first.
+
+              if (busData <= maxDiskNum)             // Valid disk number
+              // Set the name of the file to open as virtual disk, and open it
+              {
+                diskName[2] = diskSet + 48;         // Set the current Disk Set
+                diskName[4] = (busData / 10) + 48;   // Set the disk number
+                diskName[5] = busData - ((busData / 10) * 10) + 48;
+                diskErr = openSD(diskName);         // Open the "disk file" corresponding to the given disk number
+              }
+              else diskErr = 16;                    // Illegal disk number
+              break;
+              
+             case 0x03:
+              // DISK EMULATION
+              // SELTRACK - select the emulated track number (word split in 2 bytes in sequence: DATA 0 and DATA 1):
+              //
+              //                I/O DATA 0:  D7 D6 D5 D4 D3 D2 D1 D0
+              //                            ---------------------------------------------------------
+              //                             D7 D6 D5 D4 D3 D2 D1 D0    Track number (binary) LSB [0..255]
+              //
+              //                I/O DATA 1:  D7 D6 D5 D4 D3 D2 D1 D0
+              //                            ---------------------------------------------------------
+              //                             D7 D6 D5 D4 D3 D2 D1 D0    Track number (binary) MSB [0..1]
+              //
+              //
+              // Stores the selected track number into "trackSel" for "disk file" access.
+              // A "disk file" is a binary file that emulates a disk using a LBA-like logical sector number.
+              // The SELTRACK and SELSECT operations convert the legacy track/sector address into a LBA-like logical 
+              //  sector number used to set the logical sector address inside the "disk file".
+              // A control is performed on both current sector and track number for valid values. 
+              // Errors are stored into "diskErr" (see ERRDISK Opcode).
+              //
+              //
+              // NOTE 1: Allowed track numbers are in the range [0..511] (512 tracks)
+              // NOTE 2: Before a WRITESECT or READSECT operation at least a SELSECT or a SELTRAK operation
+              //         must be performed
+  
+              if (!ioByteCnt)
+              // LSB
+              {
+                trackSel = busData;
+              }
+              else
+              // MSB
+              {
+                trackSel = (((word) busData) << 8) | lowByte(trackSel);
+                if ((trackSel < 512) && (sectSel < 32))
+                // Sector and track numbers valid
+                {
+                  diskErr = 0;                      // No errors
+                }
+                else
+                // Sector or track invalid number
+                {
+                  if (sectSel < 32) diskErr = 17;   // Illegal track number
+                  else diskErr = 18;                // Illegal sector number
+                }
+                
+              }
+              ioByteCnt++;
+              break;
+              
+             case 0x04:
+              // DISK EMULATION
+              // SELSECT - select the emulated sector number (binary):
+              //
+              //                  I/O DATA:  D7 D6 D5 D4 D3 D2 D1 D0
+              //                            ---------------------------------------------------------
+              //                             D7 D6 D5 D4 D3 D2 D1 D0    Sector number (binary) [0..31]
+              //
+              //
+              // Stores the selected sector number into "sectSel" for "disk file" access.
+              // A "disk file" is a binary file that emulates a disk using a LBA-like logical sector number.
+              // The SELTRACK and SELSECT operations convert the legacy track/sector address into a LBA-like logical 
+              //  sector number used to set the logical sector address inside the "disk file".
+              // A control is performed on both current sector and track number for valid values. 
+              // Errors are stored into "diskErr" (see ERRDISK Opcode).
+              //
+              //
+              // NOTE 1: Allowed sector numbers are in the range [0..31] (32 sectors)
+              // NOTE 2: Before a WRITESECT or READSECT operation at least a SELSECT or a SELTRAK operation
+              //         must be performed
+  
+              sectSel = busData;
+              if ((trackSel < 512) && (sectSel < 32))
+              // Sector and track numbers valid
+              {
+                diskErr = 0;                        // No errors
+              }
+              else
+              // Sector or track invalid number
+              {
+                if (sectSel < 32) diskErr = 17;     // Illegal track number
+                else diskErr = 18;                  // Illegal sector number
+              }
               break;
 
-             case 15: 
+             case 0x05:
+              // DISK EMULATION
+              // WRITESECT - write 512 data bytes sequentially into the current emulated disk/track/sector:
+              //
+              //                 I/O DATA 0: D7 D6 D5 D4 D3 D2 D1 D0
+              //                            ---------------------------------------------------------
+              //                             D7 D6 D5 D4 D3 D2 D1 D0    First Data byte
+              //
+              //                      |               |
+              //                      |               |
+              //                      |               |                 <510 Data Bytes>
+              //                      |               |
+              //
+              //
+              //               I/O DATA 511: D7 D6 D5 D4 D3 D2 D1 D0
+              //                            ---------------------------------------------------------
+              //                             D7 D6 D5 D4 D3 D2 D1 D0    512th Data byte (Last byte)
+              //
+              //
+              // Writes the current sector (512 bytes) of the current track/sector, one data byte each call. 
+              // All the 512 calls must be always performed sequentially to have a WRITESECT operation correctly done. 
+              // If an error occurs during the WRITESECT operation, all subsequent write data will be ignored and
+              //  the write finalization will not be done.
+              // If an error occurs calling any DISK EMULATION Opcode (SDMOUNT excluded) immediately before the WRITESECT 
+              //  Opcode call, all the write data will be ignored and the WRITESECT operation will not be performed.
+              // Errors are stored into "diskErr" (see ERRDISK Opcode).
+              //
+              // NOTE 1: Before a WRITESECT operation at least a SELTRACK or a SELSECT must be always performed
+              // NOTE 2: Remember to open the right "disk file" at first using the SELDISK Opcode
+              // NOTE 3: The write finalization on SD "disk file" is executed only on the 512th data byte exchange, so be 
+              //         sure that exactly 512 data bytes are exchanged.
+  
+              if (!ioByteCnt)
+              // First byte of 512, so set the right file pointer to the current emulated track/sector first
+              {
+                if ((trackSel < 512) && (sectSel < 32) && (!diskErr))
+                // Sector and track numbers valid and no previous error; set the LBA-like logical sector
+                {
+                diskErr = seekSD((trackSel << 5) | sectSel);  // Set the starting point inside the "disk file"
+                                                              //  generating a 14 bit "disk file" LBA-like 
+                                                              //  logical sector address created as TTTTTTTTTSSSSS
+                }
+              }
+            
+  
+              if (!diskErr)
+              // No previous error (e.g. selecting disk, track or sector)
+              {
+                tempByte = ioByteCnt % 32;          // [0..31]
+                bufferSD[tempByte] = busData;        // Store current exchanged data byte in the buffer array
+                if (tempByte == 31)
+                // Buffer full. Write all the buffer content (32 bytes) into the "disk file"
+                {
+                  diskErr = writeSD(bufferSD, &numWriBytes);
+                  if (numWriBytes < 32) diskErr = 19; // Reached an unexpected EOF
+                  if (ioByteCnt >= 511)
+                  // Finalize write operation and check result (if no previous error occurred)
+                  {
+                    if (!diskErr) diskErr = writeSD(NULL, &numWriBytes);
+                   
+                  }
+                }
+              }
+              ioByteCnt++;                          // Increment the counter of the exchanged data bytes
+              break;
+
+              
+             case 0x0F:
               // write value on the bus to the bank adress latch
               bankReg = busData;
               bitSet(PORTD, bclk);
@@ -185,13 +444,13 @@ void loop(){
              default:
               break;
               // should never jump to here - this can never be true.
-          }
-       }  
+          } // endcase write 
+       } // endif write  
        // bus read
        else {
             busData = 0;
-            switch (a_nibble) {
-              case 0:
+            switch (curOp & 0x0F) { // address nibble
+              case 0x00:
                //This is the UART status register it is simalar to the 6850 (however has a built in buffer TX & RX) 
                // bit 0 = Receive Data register full (this is set if there is data waiting)
                // bit 1 = transmit data empty (this is set if tx buffer has space)
@@ -213,7 +472,7 @@ void loop(){
               
                break; // end of read uart control register
               
-              case 1:
+              case 0x01:
                //this is reading a byte from the terminal. so we need to write the next byte in
                //the uart to the bus.
 
@@ -221,18 +480,19 @@ void loop(){
               
                break; // end of read uart 
 
-              case 15:
+              case 0x0F:
               //this reads out last value stored in bank register.
               busData = bankReg;
              
               default:
                break;
                // should never jump here, this can never be true.
-            }
+            } // endcase read
             busWrite(busData);  // data is on the bus
-       } // inner else
+       } // inner else read
+       lastOp = curOp;
        busIO();  // end the current Io Request as data is ready to be read or written;
-      } // outer else
+      } // outer else r_w
       
   
      } // io request
@@ -266,12 +526,22 @@ void busIO(void) {
       busTstate(); // this just makes sure we are ready to read on the next go-through.
 }
 
+
+// IOS SD Card routines for Z80-MBC2 floppy emulation See *** Attribution at top ***
 // ------------------------------------------------------------------------------
 
 // SD Disk routines (FAT16 and FAT32 filesystems supported) using the PetitFS library.
 // For more info about PetitFS see here: http://elm-chan.org/fsw/ff/00index_p.html
 
 // ------------------------------------------------------------------------------
+
+void waitKey()
+// Wait a key to continue
+{
+  while (Serial.available() > 0) Serial.read();   // Flush serial Rx buffer
+  Serial.println(F("IOS: Check SD and press a key to repeat\r\n"));
+  while(Serial.available() < 1);
+}
 
 
 byte mountSD(FATFS* fatFs)
