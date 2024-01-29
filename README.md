@@ -32,7 +32,8 @@ folder under a specific folder, where they can not also be called out inline.
 This Repository uses the floppy emulation code from the Z80-MBC2 Project by Fabio Defabis
 this code is slightly modified to fit the differing architecutre, however the original code
 is (C) Fabio Defabis under the terms of the GPL.
-You can find details aboutthe Z80-MBC2 here:
+
+You can find details about the Z80-MBC2 here:
 https://github.com/SuperFabius/Z80-MBC2 -or-
 https://hackaday.io/project/159973-z80-mbc2-a-4-ics-homebrew-z80-computer
 
