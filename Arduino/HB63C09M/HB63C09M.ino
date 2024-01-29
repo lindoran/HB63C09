@@ -156,12 +156,13 @@ bitSet(PORTD, bclk);
 bitClear(PORTD, bclk);    //register is now Zero
 bankReg = 0;
 
-_delay_ms(1600);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
-
 //inputs        
 bitClear(DDRB, r_w);
 bitClear(DDRD, ioreq_);
 bitClear(DDRD, xsin);
+
+// **TODO** Figure out how to tell if this is a reset from the switch so this can be eliminated when user presses
+_delay_ms(1600);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
 
 // mount the SD Card to initiaize Z80-MBC2 - IOS Floppy emulation 
 // see Attribuition at top

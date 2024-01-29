@@ -12,7 +12,7 @@ when I get to where its more complete I will release a stable branch, for now th
 
 
 You can find more details at: 
-https://hackaday.io/project/186398-hb6809-homebrew-computer
+https://hackaday.io/project/193108-hb63c09m-mini-itx-63c09-form-factor-computer
 -and- 
 https://www.hackster.io/z80dad/hb63c09m-mini-itx-hd63c09-avr-based-homebrew-computer-34904b
 
@@ -32,5 +32,9 @@ folder under a specific folder, where they can not also be called out inline.
 This Repository uses the floppy emulation code from the Z80-MBC2 Project by Fabio Defabis
 this code is slightly modified to fit the differing architecutre, however the original code
 is (C) Fabio Defabis under the terms of the GPL.
+You can find details aboutthe Z80-MBC2 here:
+https://github.com/SuperFabius/Z80-MBC2 -or-
+https://hackaday.io/project/159973-z80-mbc2-a-4-ics-homebrew-z80-computer
+
 
 (C) 2024 David Collins
