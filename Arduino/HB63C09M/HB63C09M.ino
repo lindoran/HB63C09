@@ -182,7 +182,7 @@ if (mountSD(&filesysSD))
        errCodeSD = mountSD(&filesysSD);
      }
      while (errCodeSD);
-     Serial.println("IOS: SD Card found!" 
+     Serial.println("IOS: SD Card found!") ;
    }
 else Serial.println
 ("...OK!");
@@ -216,8 +216,34 @@ void loop(){
         ioByteCnt = 0;  // reset multi-op counter this can't be a multi step function.
       }
       else {
-       curOp = (bitRead(PINB, r_w) << 4) | a_nibble; 
+       curOp = (bitRead(PINB, r_w) << 4) | a_nibble;  // read r_w and the address bus
        if (!(lastOp == curOp)) ioByteCnt = 0;   // do we need to reset the multi-op counter?
+      
+       /*index of operations: 
+        *-------------------- 
+        *
+        *  WRITE OPERATIONS: 
+        *   0x00      - NULL       - Legacy 6850 UART Control register. May use later (future use)
+        *   0x01      - TXSERIAL   - 6850 Wrapper: Send a byte to TX Buffer (default buffer size is 64bytes)
+        *   0x02      - SELDISK*   - Select Disk Number ie: 0..99
+        *   0x03      - SELTRACK*  - Select Disk Track  ie: 0..511 (two bytes in sequence)
+        *   0x04      - SELSECT*   - Select Disk Sector ie: 0..31  
+        *   0x05      - WRITESECT* - Write a Sector to the Disk (512 bytes in sequence) 
+        *   ...
+        *   0x0F      - SETBANK    - Write the low nibble (3 bits) on the data bus to the bank register
+        *  
+        *  READ OPERATIONS:  
+        *   0x00      - UARTSTAT   - 6850 Wrapper: Send data back as if it were a 6850 Status regeister.
+        *   0x01      - RXSERIAL   - 6850 Wrapper: Read a byte from the RX buffer (defalut buffer size is 64bytes)
+        *   0x02      - ERRDISK*   - Read out the last disk error
+        *   0x03      - READSECT*   - Read a sector from the disk (512 bytes in sequence) 
+        *   0x04      - SDMOUNT*    - Mount the installed volume (output error code as read value)
+        *   ...
+        *   0x0F      - RDBANK     - Read the last selected bank value 
+        *   
+        *    * - Part of IOS/Z80-MBC Code see attribuition at top.
+       */
+       
        // bus write
        if (!(bitRead(curOp, 4))) { // r_w value
            
@@ -225,6 +251,7 @@ void loop(){
            
            switch (curOp & 0x0F) { // address nibble
              case 0x00:
+               // NULL
                //This is normally the UART control register for the 6850, since it is internally
                //configured in the AVR we don't need to store this information. but we need to 
                //leave this for legacy support of older code. 
@@ -233,7 +260,8 @@ void loop(){
              
              case 0x01:
               // send a byte to the terminal.
-             
+              // TX SERIAL 
+              
               Serial.write(busData);
 
               break;
@@ -449,9 +477,11 @@ void loop(){
        } // endif write  
        // bus read
        else {
-            busData = 0;
+            busData = 0;  // flush busdata from last operation 
             switch (curOp & 0x0F) { // address nibble
+              
               case 0x00:
+               // UARTSTAT 
                //This is the UART status register it is simalar to the 6850 (however has a built in buffer TX & RX) 
                // bit 0 = Receive Data register full (this is set if there is data waiting)
                // bit 1 = transmit data empty (this is set if tx buffer has space)
@@ -480,11 +510,127 @@ void loop(){
                busData = Serial.read();
               
                break; // end of read uart 
+              
+              case 0x02:
+               // DISK EMULATION
+               // ERRDISK - read the error code after a SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT 
+               //           or SDMOUNT operation
+               //
+               //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
+               //                            ---------------------------------------------------------
+               //                             D7 D6 D5 D4 D3 D2 D1 D0    DISK error code (binary)
+               //
+               //
+               // Error codes table:
+               //
+               //    error code    | description
+               // ---------------------------------------------------------------------------------------------------
+               //        0         |  No error
+               //        1         |  DISK_ERR: the function failed due to a hard error in the disk function, 
+               //                  |   a wrong FAT structure or an internal error
+               //        2         |  NOT_READY: the storage device could not be initialized due to a hard error or 
+               //                  |   no medium
+               //        3         |  NO_FILE: could not find the file
+               //        4         |  NOT_OPENED: the file has not been opened
+               //        5         |  NOT_ENABLED: the volume has not been mounted
+               //        6         |  NO_FILESYSTEM: there is no valid FAT partition on the drive
+               //       16         |  Illegal disk number
+               //       17         |  Illegal track number
+               //       18         |  Illegal sector number
+               //       19         |  Reached an unexpected EOF
+               //
+               //
+               //
+               //
+               // NOTE 1: ERRDISK code is referred to the previous SELDISK, SELSECT, SELTRACK, WRITESECT or READSECT
+               //         operation
+               // NOTE 2: Error codes from 0 to 6 come from the PetitFS library implementation
+               // NOTE 3: ERRDISK must not be used to read the resulting error code after a SDMOUNT operation 
+               //         (see the SDMOUNT Opcode)
+               
+               busData = diskErr;
+               break;
+               
+              case 0x03:
+               // DISK EMULATION
+               // READSECT - read 512 data bytes sequentially from the current emulated disk/track/sector:
+               //
+               //                 I/O DATA:   D7 D6 D5 D4 D3 D2 D1 D0
+               //                            ---------------------------------------------------------
+               //                 I/O DATA 0  D7 D6 D5 D4 D3 D2 D1 D0    First Data byte
+               //
+               //                      |               |
+               //                      |               |
+               //                      |               |                 <510 Data Bytes>
+               //                      |               |
+               //
+               //               I/O DATA 127  D7 D6 D5 D4 D3 D2 D1 D0
+               //                            ---------------------------------------------------------
+               //                             D7 D6 D5 D4 D3 D2 D1 D0    512th Data byte (Last byte)
+               //
+               //
+               // Reads the current sector (512 bytes) of the current track/sector, one data byte each call. 
+               // All the 512 calls must be always performed sequentially to have a READSECT operation correctly done. 
+               // If an error occurs during the READSECT operation, all subsequent read data will be = 0.
+               // If an error occurs calling any DISK EMULATION Opcode (SDMOUNT excluded) immediately before the READSECT 
+               //  Opcode call, all the read data will be will be = 0 and the READSECT operation will not be performed.
+               // Errors are stored into "diskErr" (see ERRDISK Opcode).
+               //
+               // NOTE 1: Before a READSECT operation at least a SELTRACK or a SELSECT must be always performed
+               // NOTE 2: Remember to open the right "disk file" at first using the SELDISK Opcode
+  
+               if (!ioByteCnt)
+               // First byte of 512, so set the right file pointer to the current emulated track/sector first
+               {
+                 if ((trackSel < 512) && (sectSel < 32) && (!diskErr))
+                 // Sector and track numbers valid and no previous error; set the LBA-like logical sector
+                 {
+                  diskErr = seekSD((trackSel << 5) | sectSel);  // Set the starting point inside the "disk file"
+                                                              //  generating a 14 bit "disk file" LBA-like 
+                                                              //  logical sector address created as TTTTTTTTTSSSSS
+                 }
+               }
+               if (!diskErr)
+               // No previous error (e.g. selecting disk, track or sector)
+               {
+                 tempByte = ioByteCnt % 32;        // [0..31]
+                 if (!tempByte)
+                 // Read 32 bytes of the current sector on SD in the buffer (every 32 calls, starting with the first)
+                 {
+                   diskErr = readSD(bufferSD, &numReadBytes); 
+                   if (numReadBytes < 32) diskErr = 19;    // Reached an unexpected EOF
+                 }
+                 if (!diskErr) busData = bufferSD[tempByte];// If no errors, exchange current data byte with the CPU
+               }
+               
+               ioByteCnt++;                        // Increment the counter of the exchanged data bytes
+               break;
 
+              case 0x04:
+               // DISK EMULATION
+               // SDMOUNT - mount a volume on SD, returning an error code (binary):
+               //
+               //                 I/O DATA 0: D7 D6 D5 D4 D3 D2 D1 D0
+               //                            ---------------------------------------------------------
+               //                             D7 D6 D5 D4 D3 D2 D1 D0    error code (binary)
+               //
+               //
+               //
+               // NOTE 1: This Opcode is "normally" not used. Only needed if using a virtual disk from a custom program
+               //         loaded with iLoad or with the Autoboot mode (e.g. ViDiT). Can be used to handle SD hot-swapping
+               // NOTE 2: For error codes explanation see ERRDISK Opcode
+               // NOTE 3: Only for this disk Opcode, the resulting error is read as a data byte without using the 
+               //         ERRDISK Opcode
+  
+               busData = mountSD(&filesysSD);
+               break;  
+               
               case 0x0F:
-              //this reads out last value stored in bank register.
-              busData = bankReg;
-             
+               //RDBANK 
+               //this reads out last value stored in bank register.
+               busData = bankReg;
+               break;
+               
               default:
                break;
                // should never jump here, this can never be true.
