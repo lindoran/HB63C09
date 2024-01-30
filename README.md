@@ -1,6 +1,6 @@
 # HB63C09M
 
-This is the repository of the HB63C09 Home brew computer. 
+This is the repository of the HB63C09M Home brew computer.
 
 This is a HD63C09 based system built on the ITX form factor.
 

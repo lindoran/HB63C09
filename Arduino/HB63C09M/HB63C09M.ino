@@ -504,6 +504,7 @@ void loop(){
                break; // end of read uart control register
               
               case 0x01:
+               //RXSERIAL
                //this is reading a byte from the terminal. so we need to write the next byte in
                //the uart to the bus.
 
