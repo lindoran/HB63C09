@@ -1,4 +1,4 @@
-# HB63C09
+# HB63C09M
 
 This is the repository of the HB63C09 Home brew computer. 
 
@@ -17,7 +17,7 @@ https://hackaday.io/project/193108-hb63c09m-mini-itx-63c09-form-factor-computer
 https://www.hackster.io/z80dad/hb63c09m-mini-itx-hd63c09-avr-based-homebrew-computer-34904b
 
 Addtionally this project is sponsored by PCBWay.com 
-PCBWay handles all the prototyping costs for the HB63C09
+PCBWay handles all the prototyping costs for the HB63C09M
 Please check out their website for PCB Fabrication, CNC Mechineing and 3D Printing.
 
 http://pcbway.com
