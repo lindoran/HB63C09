@@ -659,10 +659,12 @@ void busWrite(uint8_t data) {
 
 //end the current io request
 void busIO(void) {
+      noInterrupts();  // this next bit is very timing sensitive.
       // send bgnt_
-      bitClear(PORTD, IOGNT_);  
-      bitSet(PORTD, IOGNT_);
+      bitClear(PORTD, IOGNT_);    // this ends the io request - cpu is free running from this point 
+      bitSet(PORTD, IOGNT_);      // the current cycle is ended - we need to restore this as the address bus is building
       busTstate(); // this just makes sure we are ready to read on the next go-through.
+      interrupts();   //back to it...
 }
 
 
