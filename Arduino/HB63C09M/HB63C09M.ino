@@ -60,34 +60,40 @@ to develop this system see their website at http://pcbway.com
 #define  D6           6 // PA6 pin 34
 #define  D7           7 // PA7 pin 33
 
-#define  res_         0  // PB0 pin 1    6309 ~reset line
-#define  halt_        1  // PB1 pin 2    6309 ~Halt line
-#define  r_w          2  // PB2 pin 3    6309 read/~write line
-#define  irq_         3  // PB3 pin 4    6309 ~irq
-#define  ss_          4  // PB4 pin 5    sd SPI
-#define  mosi         5  // PB5 pin 6    sd SPI
-#define  miso         6  // PB6 pin 7    sd SPI
-#define  sck          7  // PB7 pin 8    sd SPI
+#define  RES_         0  // PB0 pin 1    6309 ~reset line
+#define  HALT_        1  // PB1 pin 2    6309 ~Halt line
+#define  R_W          2  // PB2 pin 3    6309 read/~write line
+#define  IRQ_         3  // PB3 pin 4    6309 ~irq
+#define  SS_          4  // PB4 pin 5    sd SPI
+#define  MOSI         5  // PB5 pin 6    sd SPI
+#define  MISO         6  // PB6 pin 7    sd SPI
+#define  SCK          7  // PB7 pin 8    sd SPI
 
-#define  scl_pc0      0 // PC0 pin 22   i2c signals
-#define  sda_pc1      1 // PC1 pin 23   i2c signals
-#define  a0           2 // PC2 pin 24   6309 A0}     These are lines used to sniff the address bus when the clock is stretching
-#define  a1           3 // PC3 pin 25   6309 A1}     this controls the function of the databus, just like any other paripheral 
-#define  a2           4 // PC4 pin 26   6309 A2} --  addtionally, we can control the top 16 bytes of the adress space in order    
-#define  a3           5 // PC5 pin 27   6309 A3}     to set the vector table in ram only mode. (at least that is the hope)     
-#define  res1         6 // PC6 pin 28   future use
-#define  res2         7 // PC7 pin 29   future use
+#define  SCL_PC0      0 // PC0 pin 22   i2c signals
+#define  SDA_PC1      1 // PC1 pin 23   i2c signals
+#define  A0           2 // PC2 pin 24   6309 A0}     
+#define  A1           3 // PC3 pin 25   6309 A1}     These are lines used to sniff the address bus when the clock is stretching 
+#define  A2           4 // PC4 pin 26   6309 A2} --  this controls the function of the databus, just like any other paripheral    
+#define  A3           5 // PC5 pin 27   6309 A3} --  addtionally, we can control the top 63 bytes of the adress space in order     
+#define  A4           6 // PC6 pin 28   6309 A4}     to set the vector table, and staging in ram only mode.
+#define  A5           7 // PC7 pin 29   6309 A5}
 
-#define a_nibble ((PINC & 60) >> 2)     //this pulls the adress lines off as a 4 bit nibble
+#define  RX           0 // PD0 pin 14   This is the RX PIN
+#define  TX           1 // PD1 pin 15   This is the TX PIN
+#define  WR_          2 // PD2 pin 16   RAM WR_ strobe
+#define  RD_          3 // PD3 pin 17   RAM RD_ strobe
+#define  BCLK         4 // PD4 pin 18   bank address clock pin
+#define  XSIN_        5 // PD5 pin 19   bus tranciever inhibit bar line
+#define  IOREQ_       6 // PD6 pin 20   io request bar line
+#define  IOGNT_       7 // PD7 pin 21   io grant bar line
 
-#define  rx           0 // PD0 pin 14   This is the RX PIN
-#define  tx           1 // PD1 pin 15   This is the TX PIN
-#define  wr_          2 // PD2 pin 16   RAM wr_ strobe
-#define  rd_          3 // PD3 pin 17   RAM rd_ strobe
-#define  bclk         4 // PD4 pin 18   bank address clock pin
-#define  xsin         5 // PD5 pin 19   bus tranciever inhibit line
-#define  ioreq_       6 // PD6 pin 20   io request bar line
-#define  iognt_       7 // PD7 pin 21   io grant bar line
+// IO control addressing 
+#define NIBBLE_BITS   6                            //this is the number of bits in the nibble - CHANGE ONLY THIS VALUE MAX 6!
+#define ADDRESS_MASK  ((1 << (NIBBLE_BITS)) - 1)   //this is the un-shifted nibble mask
+#define NIBBLE_MASK   (ADDRESS_MASK << 2)          //this is the shifted nibble mask as it appears on the C port.
+#define A_NIBBLE      ((PINC & NIBBLE_MASK) >> 2)  //this pulls the io address off C as a 6 bit nibble
+
+
 
 // File name Defines for IOS
 
@@ -130,36 +136,20 @@ Serial.begin(115200);
 busTstate();               // This tri-states the MCU bus -- it is pulled low by external pulldowns 
 
 //outputs
-bitSet(DDRD, iognt_); // these two lines set the grant signal 
-bitSet(PORTD, iognt_);
-bitSet(DDRB, res_); // seting these to outputs simply sets them low
-bitSet(DDRB, halt_);
-bitSet(DDRD, bclk); // set up the bank clock pin
+bitSet(DDRD, IOGNT_); // these two lines set the grant signal 
+bitSet(PORTD, IOGNT_);
+bitSet(DDRB, RES_); // seting these to outputs simply sets them low
+bitSet(DDRB, HALT_);
+bitSet(DDRD, BCLK); // set up the bank clock pin
 
 // 63C09 System is in tri-state
 
-/*  clear bank register: 
- *   we turn some inputs around to take controll of the busses
- *   since the mcbus is tied low, it passes 0x00 to the bus
- *   through the tranciver.  bclk is pulsed which sets the bank register
- *   to 0x00.  We then set the bankReg variable to 0 which stores
- *   the value that is passed when reading 0xA00F (the bank register)
- */ 
- 
-bitSet(DDRD,  xsin);
-bitSet(PORTD, xsin);      // inhibit the bus tranciever at its enable pin
-bitSet(DDRB, r_w);
-bitSet(PORTB, r_w);       // set tranciever to put data on the bus
-bitSet(DDRD, ioreq_);     // set io request as out / it's already clear so ioreq_ is low which enables transciever
-
-bitSet(PORTD, bclk);
-bitClear(PORTD, bclk);    //register is now Zero
 bankReg = 0;
 
 //inputs        
-bitClear(DDRB, r_w);
-bitClear(DDRD, ioreq_);
-bitClear(DDRD, xsin);
+bitClear(DDRB, R_W);
+bitClear(DDRD, IOREQ_);
+
 
 // **TODO** Figure out how to tell if this is a reset from the switch so this can be eliminated when user presses
 _delay_ms(1600);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
@@ -171,6 +161,7 @@ Serial.print("IOS: Attempting to mount SD Card");
 if (mountSD(&filesysSD))
    // Error mounting. Try again
    {
+     errCodeSD = mountSD(&filesysSD);
      errCodeSD = mountSD(&filesysSD);
      if (errCodeSD)
      // Error again. Repeat until error disappears (or the user forces a reset)
@@ -184,8 +175,7 @@ if (mountSD(&filesysSD))
      while (errCodeSD);
      Serial.println("IOS: SD Card found!") ;
    }
-else Serial.println
-("...OK!");
+else Serial.println("...OK!");
 Serial.println();
 Serial.println("HB6809 - HB63C09M Test Build");
 
@@ -200,8 +190,8 @@ Serial.println("HB6809 - HB63C09M Test Build");
 // Lets burn this candle! -- System coming out of reset state
 // these two have external pull ups- setting the lines on the arduino to inputs effectively tri-states the link between the two chips
 
-bitClear(DDRB, res_);
-bitClear(DDRB, halt_);
+bitClear(DDRB, RES_);
+bitClear(DDRB, HALT_);
 
 }
 
@@ -209,47 +199,47 @@ bitClear(DDRB, halt_);
 // Main loop
 
 void loop(){
-  // checking for ioreq_
-  if (!(bitRead(PIND, ioreq_))) { 
-      if (bitRead(PIND, xsin)) {
+  // checking for IOREQ_
+  if (!(bitRead(PIND, IOREQ_))) { 
+      if (!(bitRead(PIND, XSIN_))) {
         busIO();  // end early for expansion bus IO
         ioByteCnt = 0;  // reset multi-op counter this can't be a multi step function.
       }
       else {
-       curOp = (bitRead(PINB, r_w) << 4) | a_nibble;  // read r_w and the address bus
+       curOp = (bitRead(PINB, R_W) << NIBBLE_BITS) | A_NIBBLE;  // read R_W and the address bus
        if (!(lastOp == curOp)) ioByteCnt = 0;   // do we need to reset the multi-op counter?
       
        /*index of operations: 
         *-------------------- 
         *
         *  WRITE OPERATIONS: 
-        *   0x00      - NULL       - Legacy 6850 UART Control register. May use later (future use)
-        *   0x01      - TXSERIAL   - 6850 Wrapper: Send a byte to TX Buffer (default buffer size is 64bytes)
-        *   0x02      - SELDISK*   - Select Disk Number ie: 0..99
-        *   0x03      - SELTRACK*  - Select Disk Track  ie: 0..511 (two bytes in sequence)
-        *   0x04      - SELSECT*   - Select Disk Sector ie: 0..31  
-        *   0x05      - WRITESECT* - Write a Sector to the Disk (512 bytes in sequence) 
+        *   0xA000    - NULL       - Legacy 6850 UART Control register. May use later (future use)
+        *   0xA001    - TXSERIAL   - 6850 Wrapper: Send a byte to TX Buffer (default buffer size is 64bytes)
+        *   0xA002    - SELDISK*   - Select Disk Number ie: 0..99
+        *   0xA003    - SELTRACK*  - Select Disk Track  ie: 0..511 (two bytes in sequence)
+        *   0xA004    - SELSECT*   - Select Disk Sector ie: 0..31  
+        *   0xA005    - WRITESECT* - Write a Sector to the Disk (512 bytes in sequence) 
         *   ...
-        *   0x0F      - SETBANK    - Write the low nibble (3 bits) on the data bus to the bank register
+        *   0xA03F    - SETBANK    - Write the low nibble (3 bits) on the data bus to the bank register
         *  
         *  READ OPERATIONS:  
-        *   0x00      - UARTSTAT   - 6850 Wrapper: Send data back as if it were a 6850 Status regeister.
-        *   0x01      - RXSERIAL   - 6850 Wrapper: Read a byte from the RX buffer (defalut buffer size is 64bytes)
-        *   0x02      - ERRDISK*   - Read out the last disk error
-        *   0x03      - READSECT*   - Read a sector from the disk (512 bytes in sequence) 
-        *   0x04      - SDMOUNT*    - Mount the installed volume (output error code as read value)
+        *   0xA000    - UARTSTAT   - 6850 Wrapper: Send data back as if it were a 6850 Status regeister.(SEE ACCEPTIONS IN CASE)
+        *   0xA001    - RXSERIAL   - 6850 Wrapper: Read a byte from the RX buffer (defalut buffer size is 64bytes)
+        *   0xA002    - ERRDISK*   - Read out the last disk error
+        *   0xA003    - READSECT*   - Read a sector from the disk (512 bytes in sequence) 
+        *   0xA004    - SDMOUNT*    - Mount the installed volume (output error code as read value)
         *   ...
-        *   0x0F      - RDBANK     - Read the last selected bank value 
+        *   0xA03F    - RDBANK     - Read the last selected bank value 
         *   
         *    * - Part of IOS/Z80-MBC Code see attribuition at top.
        */
        
        // bus write
-       if (!(bitRead(curOp, 4))) { // r_w value
+       if (!(bitRead(curOp, NIBBLE_BITS))) { // R_W value
            
            busData = busRead();    // read the waiting data from the bus.
            
-           switch (curOp & 0x0F) { // address nibble
+           switch (curOp & ADDRESS_MASK) { // address nibble
              case 0x00:
                // NULL
                //This is normally the UART control register for the 6850, since it is internally
@@ -464,12 +454,13 @@ void loop(){
               break;
 
               
-             case 0x0F:
+             case 0x3F:
               // write value on the bus to the bank adress latch
               bankReg = busData;
-              bitSet(PORTD, bclk);
-              bitClear(PORTD, bclk);
-             
+              bitSet(PORTD, BCLK);
+              bitClear(PORTD, BCLK);
+              break; 
+              
              default:
               break;
               // should never jump to here - this can never be true.
@@ -478,13 +469,13 @@ void loop(){
        // bus read
        else {
             busData = 0;  // flush busdata from last operation 
-            switch (curOp & 0x0F) { // address nibble
+            switch (curOp & ADDRESS_MASK) { // address nibble
               
               case 0x00:
                // UARTSTAT 
                //This is the UART status register it is simalar to the 6850 (however has a built in buffer TX & RX) 
                // bit 0 = Receive Data register full (this is set if there is data waiting)
-               // bit 1 = transmit data empty (this is set if tx buffer has space)
+               // bit 1 = transmit data empty (this is set if TX buffer has space)
                // bit 2 = depriciated
                // bit 3 = depriciated
                // bit 4 = depricaited
@@ -626,7 +617,7 @@ void loop(){
                busData = mountSD(&filesysSD);
                break;  
                
-              case 0x0F:
+              case 0x3F:
                //RDBANK 
                //this reads out last value stored in bank register.
                busData = bankReg;
@@ -640,7 +631,7 @@ void loop(){
        } // inner else read
        lastOp = curOp;
        busIO();  // end the current Io Request as data is ready to be read or written;
-      } // outer else r_w
+      } // outer else R_W
       
   
      } // io request
@@ -669,8 +660,8 @@ void busWrite(uint8_t data) {
 //end the current io request
 void busIO(void) {
       // send bgnt_
-      bitClear(PORTD, iognt_);  
-      bitSet(PORTD, iognt_);
+      bitClear(PORTD, IOGNT_);  
+      bitSet(PORTD, IOGNT_);
       busTstate(); // this just makes sure we are ready to read on the next go-through.
 }
 
@@ -686,7 +677,7 @@ void busIO(void) {
 void waitKey()
 // Wait a key to continue
 {
-  while (Serial.available() > 0) Serial.read();   // Flush serial Rx buffer
+  while (Serial.available() > 0) Serial.read();   // Flush serial RX buffer
   Serial.println(F("IOS: Check SD and press a key to repeat\r\n"));
   while(Serial.available() < 1);
 }
