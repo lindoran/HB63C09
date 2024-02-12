@@ -18,9 +18,9 @@ CpByts: ldw    #((LstByt+2)-CopyBlock)    ; number of bytes into W
 ;;  we need to relocate the loader to the static block so we can load the rom space.
 
 CopyBlock:
-        lda    x+                         ; transfer a byte
-        sta    u+                         ; store a byte
-        decb
+        lda    ,x+                         ; transfer a byte
+        sta    ,u+                         ; store a byte
+        decw
 LstByt: bne CopyBlock
 
 ;;  This is a bit tricky, the byte loader sends a new byte at each read attempt
@@ -35,12 +35,12 @@ LstByt: bne CopyBlock
 
         ldx   #loadfm                     ; set the start address to the loader
         lda   #255                        ; unlock code magic nubmer to the loader
-        sta   x                           ; unlock the loader
-        lda   x                           ; load destiation address into D
-        ldb   x                           ; ...
+        sta   ,x                           ; unlock the loader
+        lda   ,x                           ; load destiation address into D
+        ldb   ,x                           ; ...
         tfr   d,u                         ; we will need A
-        lde   x                           ; byte count into W
-        ldf   x                           ; ...
+        lde   ,x                           ; byte count into W
+        ldf   ,x                           ; ...
         lda   #loadsm                     ; load self modifying code to a
         sta   loader+1                    ; modify the code lda x+ -> lda x
         jmp   loader                      ; jump to self copied loader
