@@ -48,7 +48,7 @@ to develop this system see their website at http://pcbway.com
 #include <Wire.h>
 #include <EEPROM.h>
 #include "PetitFS.h"
-
+#include "hello.h"
 
 // PORT A IS THE AVR DATABUS - this is behind a bus transceiver 
 #define  D0           0 // PA0 pin 40   
@@ -110,7 +110,7 @@ uint16_t ioByteCnt;                   // Exchanged bytes counter durring an I/O 
 uint8_t  tempByte;                    // temorary byte storage
 uint8_t  errCodeSD;                   // Temporary variable to store error codes from the PetitFS
 uint8_t  numReadBytes;                // Number of read bytes after a readSD() call
-
+uint8_t  loaderReg = 0;               // loader register.
 
 const char *  fileNameSD;             // Pointer to the string with the currently used file name
 
@@ -199,6 +199,14 @@ bitClear(DDRB, HALT_);
 // Main loop
 
 void loop(){
+  // clean up LOADER 
+  if ((ioByteCnt > (hello_blks[0].len+4)) && ( loaderReg = 255) ) {
+      // we are done loading the data and must reset or the computer will hang.
+      loaderReg = 0; // re-lock the loader
+      ioByteCnt = 0; // reset the byte count - we are done. even if we start a new operation we need to be at zed
+      bitSet(DDRB, RES_);
+      bitClear(DDRB, RES_);
+    }
   // checking for IOREQ_
   if (!(bitRead(PIND, IOREQ_))) { 
       if (!(bitRead(PIND, XSIN_))) {
@@ -208,7 +216,7 @@ void loop(){
       else {
        curOp = (bitRead(PINB, R_W) << NIBBLE_BITS) | A_NIBBLE;  // read R_W and the address bus
        if (!(lastOp == curOp)) ioByteCnt = 0;   // do we need to reset the multi-op counter?
-      
+       
        /*index of operations: 
         *-------------------- 
         *
@@ -220,6 +228,7 @@ void loop(){
         *   0xA004    - SELSECT*   - Select Disk Sector ie: 0..31  
         *   0xA005    - WRITESECT* - Write a Sector to the Disk (512 bytes in sequence) 
         *   ...
+        *   0xA03F    - LOADERR    - This is the loader register, it is unlocked by writing 255 after boot up.
         *   0xA03F    - SETBANK    - Write the low nibble (3 bits) on the data bus to the bank register
         *  
         *  READ OPERATIONS:  
@@ -229,6 +238,7 @@ void loop(){
         *   0xA003    - READSECT*   - Read a sector from the disk (512 bytes in sequence) 
         *   0xA004    - SDMOUNT*    - Mount the installed volume (output error code as read value)
         *   ...
+        *   0xA03E    - LOADER     - This is the loader port its typically locked to the user.
         *   0xA03F    - RDBANK     - Read the last selected bank value 
         *   
         *    * - Part of IOS/Z80-MBC Code see attribuition at top.
@@ -453,8 +463,33 @@ void loop(){
               ioByteCnt++;                          // Increment the counter of the exchanged data bytes
               break;
 
-              
+             case 0x3E:
+              // LOADERR
+              // The loader register is only used durring boot up, 
+               switch(busData) {
+                case 0x01:
+                  //reset the system
+                  if (loaderReg == 0xFF) {  
+                  bitSet(DDRB, RES_);
+                  bitClear(DDRB, RES_);  // system will reset at the end of the IO request.
+                  loaderReg = 0;
+                  }
+                  else loaderReg = 0;
+                  
+                  break;
+                case 0xff:
+                  //unlock the register
+                  loaderReg = 0xFF;
+                  break;
+                default:
+                  //any other value set to zero (locked)
+                  loaderReg = 0;
+                  break;
+              }
+              break;
+               
              case 0x3F:
+              // SETBANK
               // write value on the bus to the bank adress latch
               bankReg = busData;
               bitSet(PORTD, BCLK);
@@ -616,7 +651,42 @@ void loop(){
   
                busData = mountSD(&filesysSD);
                break;  
-               
+
+              case 0x3E:
+                // LOADER
+                // This will load the system in a "ROMLESS" memory configuration 
+                if (loaderReg == 255) {        // check to see if the loader is unlocked
+                  switch(ioByteCnt) {
+                    case 0x00:
+                      // send the start address MSB
+                      busData = (hello_blks[0].start >> 8) & 0xFF;
+                      
+                    break; // will this break
+                    case 0x01:
+                     // send the start address LSB
+                      busData = hello_blks[0].start & 0xFF;
+                      
+                    break;
+                    case 0x02:
+                     // send the number of bytes to read MSB
+                      busData = (hello_blks[0].len >> 8) & 0xFF;
+
+                    case 0x03:
+                     // send the number of bytes to read LSB
+                      busData = hello_blks[0].len & 0xFF; 
+                    break;
+                    
+                    default:
+                      //send the data                          
+                      busData = hello_blks[0].data[ioByteCnt-4];
+                      
+                    break;  
+                  }
+                  ioByteCnt++; 
+                  
+                } 
+                break;
+                
               case 0x3F:
                //RDBANK 
                //this reads out last value stored in bank register.
@@ -664,7 +734,7 @@ void busIO(void) {
       bitClear(PORTD, IOGNT_);    // this ends the io request - cpu is free running from this point 
       bitSet(PORTD, IOGNT_);      // the current cycle is ended - we need to restore this as the address bus is building
       busTstate(); // this just makes sure we are ready to read on the next go-through.
-      interrupts();   //back to it...
+      interrupts();  // back to it
 }
 
 
