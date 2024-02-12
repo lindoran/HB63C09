@@ -35,14 +35,15 @@ LstByt: bne CopyBlock
 
         ldx   #loadfm                     ; set the start address to the loader
         lda   #255                        ; unlock code magic nubmer to the loader
-        sta   ,x                           ; unlock the loader
-        lda   ,x                           ; load destiation address into D
-        ldb   ,x                           ; ...
+        sta   ,x                          ; unlock the loader
+        lda   ,x                          ; load destiation address into D
+        ldb   ,x                          ; ...
         tfr   d,u                         ; we will need A
-        lde   ,x                           ; byte count into W
-        ldf   ,x                           ; ...
+        lde   ,x                          ; byte count into W
+        ldf   ,x                          ; ...
         lda   #loadsm                     ; load self modifying code to a
         sta   loader+1                    ; modify the code lda x+ -> lda x
         jmp   loader                      ; jump to self copied loader
 
+;after the loader runs the microcontroller resets the CPU as it counts bytes along with W.
 
