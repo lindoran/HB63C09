@@ -49,56 +49,79 @@ to develop this system see their website at http://pcbway.com
 #include <EEPROM.h>
 #include "PetitFS.h"
 #include "hello.h"
+#include "blockcopy.h"
 
-// PORT A IS THE AVR DATABUS - this is behind a bus transceiver 
-#define  D0           0 // PA0 pin 40   
-#define  D1           1 // PA1 pin 39
-#define  D2           2 // PA2 pin 38
-#define  D3           3 // PA3 pin 37
-#define  D4           4 // PA4 pin 36
-#define  D5           5 // PA5 pin 35
-#define  D6           6 // PA6 pin 34
-#define  D7           7 // PA7 pin 33
+// AVR DATABUS - NOT USED - JUST FOR REFRENCE - 
+const uint8_t D0      = 0; // PA0 (pin 40)
+const uint8_t D1      = 1; // PA1 (pin 39)
+const uint8_t D2      = 2; // PA2 (pin 38)
+const uint8_t D3      = 3; // PA3 (pin 37)
+const uint8_t D4      = 4; // PA4 (pin 36)
+const uint8_t D5      = 5; // PA5 (pin 35)
+const uint8_t D6      = 6; // PA6 (pin 34)
+const uint8_t D7      = 7; // PA7 (pin 33)
 
-#define  RES_         0  // PB0 pin 1    6309 ~reset line
-#define  HALT_        1  // PB1 pin 2    6309 ~Halt line
-#define  R_W          2  // PB2 pin 3    6309 read/~write line
-#define  IRQ_         3  // PB3 pin 4    6309 ~irq
-#define  SS_          4  // PB4 pin 5    sd SPI
-#define  MOSI         5  // PB5 pin 6    sd SPI
-#define  MISO         6  // PB6 pin 7    sd SPI
-#define  SCK          7  // PB7 pin 8    sd SPI
+// PORT B 
+const uint8_t RES_    = 0; // PB0 (pin 1) - 6309 ~reset line
+const uint8_t HALT_   = 1; // PB1 (pin 2) - 6309 ~Halt line
+const uint8_t R_W     = 2; // PB2 (pin 3) - 6309 read/~write line
+const uint8_t IRQ_    = 3; // PB3 (pin 4) - 6309 ~irq
+const uint8_t SPISS_  = 4; // PB4 (pin 5) - sd SPI
+const uint8_t SPIMOSI = 5; // PB5 (pin 6) - sd SPI
+const uint8_t SPIMISO = 6; // PB6 (pin 7) - sd SPI
+const uint8_t SPISCK  = 7; // PB7 (pin 8) - sd SPI
 
-#define  SCL_PC0      0 // PC0 pin 22   i2c signals
-#define  SDA_PC1      1 // PC1 pin 23   i2c signals
-#define  A0           2 // PC2 pin 24   6309 A0}     
-#define  A1           3 // PC3 pin 25   6309 A1}     These are lines used to sniff the address bus when the clock is stretching 
-#define  A2           4 // PC4 pin 26   6309 A2} --  this controls the function of the databus, just like any other paripheral    
-#define  A3           5 // PC5 pin 27   6309 A3} --  addtionally, we can control the top 63 bytes of the adress space in order     
-#define  A4           6 // PC6 pin 28   6309 A4}     to set the vector table, and staging in ram only mode.
-#define  A5           7 // PC7 pin 29   6309 A5}
+// PORT C
+const uint8_t SCL_PC0 = 0; // PC0 (pin 22) - i2c signals
+const uint8_t SDA_PC1 = 1; // PC1 (pin 23) - i2c signals
+const uint8_t MCUA0   = 2; // PC2 (pin 24) - 6309 A0
+const uint8_t MCUA1   = 3; // PC3 (pin 25) - 6309 A1
+const uint8_t MCUA2   = 4; // PC4 (pin 26) - 6309 A2
+const uint8_t MCUA3   = 5; // PC5 (pin 27) - 6309 A3
+const uint8_t MCUA4   = 6; // PC6 (pin 28) - 6309 A4
+const uint8_t MCUA5   = 7; // PC7 (pin 29) - 6309 A5
 
-#define  RX           0 // PD0 pin 14   This is the RX PIN
-#define  TX           1 // PD1 pin 15   This is the TX PIN
-#define  WR_          2 // PD2 pin 16   RAM WR_ strobe
-#define  RD_          3 // PD3 pin 17   RAM RD_ strobe
-#define  BCLK         4 // PD4 pin 18   bank address clock pin
-#define  XSIN_        5 // PD5 pin 19   bus tranciever inhibit bar line
-#define  IOREQ_       6 // PD6 pin 20   io request bar line
-#define  IOGNT_       7 // PD7 pin 21   io grant bar line
+// PORT D
+const uint8_t RX      = 0; // PD0 (pin 14) - RX PIN
+const uint8_t TX      = 1; // PD1 (pin 15) - TX PIN
+const uint8_t WR_     = 2; // PD2 (pin 16) - RAM WR_ strobe
+const uint8_t RD_     = 3; // PD3 (pin 17) - RAM RD_ strobe
+const uint8_t BCLK    = 4; // PD4 (pin 18) - bank address clock pin
+const uint8_t XSIN_   = 5; // PD5 (pin 19) - bus transceiver inhibit bar line
+const uint8_t IOREQ_  = 6; // PD6 (pin 20) - io request bar line
+const uint8_t IOGNT_  = 7; // PD7 (pin 21) - io grant bar line
 
-// IO control addressing 
-#define NIBBLE_BITS   6                            //this is the number of bits in the nibble - CHANGE ONLY THIS VALUE MAX 6!
-#define ADDRESS_MASK  ((1 << (NIBBLE_BITS)) - 1)   //this is the un-shifted nibble mask
-#define NIBBLE_MASK   (ADDRESS_MASK << 2)          //this is the shifted nibble mask as it appears on the C port.
-#define A_NIBBLE      ((PINC & NIBBLE_MASK) >> 2)  //this pulls the io address off C as a 6 bit nibble
+// IO control addressing
+const uint8_t NIBBLE_BITS  =   6; // Number of bits in the nibble
+const uint8_t ADDRESS_MASK =  63; // Un-shifted nibble mask as it appears in the curOp variable
+const uint8_t NIBBLE_MASK  = 252; // Shifted nibble mask as it appears on the C port
+
+// Pulls the I/O address off PORTC as a 6-bit nibble
+#define A_NIBBLE ((uint8_t)((PINC & NIBBLE_MASK) >> 2))
+
+//Write accsess time - best to not mess with this
+#define DO_TWICE_NOP() \
+do { \
+    __asm__ __volatile__ ("nop\n\t"); \
+    __asm__ __volatile__ ("nop\n\t"); \
+} while(0)
 
 
+// set up READ_MODE and WRITE_MODE enum for the data direction function.
+enum PinMode {
+    READ_MODE,
+    WRITE_MODE
+};
+
+// Forward definging these here for ease of understanding as they use the above constants 
+
+void ddr_a_nibble(enum PinMode mode); // forward def, see code below main block. ex: ddr_a_nibble(READ_MODE);
+void write_a_nibble(uint16_t data);   // forward def, see code block below ex: write_a_nibble(0xFFFE); 
 
 // File name Defines for IOS
 
-#define   M6X09DISK     "DSxNyy.DSK"        // Generic 6x09 disk name (from DS0N00.DSK to DS9N99.DSK)
-#define   DS_OSNAME       "DSxNAM.DAT"      // File with the OS name for Disk Set "x" (from DS0NAM.DAT to DS9NAM.DAT)
+#define   M6X09DISK     "DSxNyy.DSK"  // Generic 6x09 disk name (from DS0N00.DSK to DS9N99.DSK)
+#define   DS_OSNAME     "DSxNAM.DAT"  // File with the OS name for Disk Set "x" (from DS0NAM.DAT to DS9NAM.DAT)
 
 // Global System variables
 
@@ -111,6 +134,7 @@ uint8_t  tempByte;                    // temorary byte storage
 uint8_t  errCodeSD;                   // Temporary variable to store error codes from the PetitFS
 uint8_t  numReadBytes;                // Number of read bytes after a readSD() call
 uint8_t  loaderReg = 0;               // loader register.
+uint16_t loaderAddr= 0;               // this is the loader current address.
 
 const char *  fileNameSD;             // Pointer to the string with the currently used file name
 
@@ -140,19 +164,59 @@ bitSet(DDRD, IOGNT_); // these two lines set the grant signal
 bitSet(PORTD, IOGNT_);
 bitSet(DDRB, RES_); // seting these to outputs simply sets them low
 bitSet(DDRB, HALT_);
-bitSet(DDRD, BCLK); // set up the bank clock pin
+bitSet(DDRD, BCLK); // set up the bank clock pin to output
 
 // 63C09 System is in tri-state
 
-bankReg = 0;
+bankReg = 0;        // bank register is reset along with the 63C09 by the avr we need to update the stored value
 
-//inputs        
-bitClear(DDRB, R_W);
-bitClear(DDRD, IOREQ_);
+// flush the RX buffer to clear spurius inputs due to dongle power up
+// this avoids issues displaying the incomming prompt text.
+ while (Serial.available() > 0) 
+  {
+    Serial.read();
+  }
 
 
 // **TODO** Figure out how to tell if this is a reset from the switch so this can be eliminated when user presses
-_delay_ms(1600);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
+_delay_ms(500);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
+
+
+// Stageing 
+//Check for ROM / RAM mode 
+bitSet(DDRD, XSIN_);   // inhibit the bus tranceiver (tri-state bioreq_)
+bitSet(DDRD, IOREQ_);   // set tranceiver to enable output, bioreq_ = 0
+bitSet(DDRB, R_W);     // set R_W LINE pin to an output
+
+ddr_a_nibble(WRITE_MODE);  // set the nibble writer to write mode.
+RAMWrite(42,0xFFFF);    //write the meaning of life.
+
+if (RAMRead(0xFFFF) == 42) {
+  Serial.printf("\n\n\nStaging From RAM...");
+  
+  loaderAddr = blockcopy_blks[0].start;
+
+  for (unsigned int j = 0; j < blockcopy_blks[0].len; ++j) {
+    RAMWrite(blockcopy_blks[0].data[j],loaderAddr);
+    loaderAddr++;
+  }
+  // set the reset vector to the begining of the loader
+  RAMWrite(0xFF, 0xFFFE);
+  RAMWrite(0xC0, 0xFFFF);
+
+  
+  write_a_nibble(0);      // these two lines put the address bus back to tri state
+  ddr_a_nibble(READ_MODE);
+} else {
+  Serial.println("Staging from ROM...");
+}
+
+// run state 
+bitClear(DDRD, IOREQ_);
+bitClear(PORTB, R_W);
+bitClear(DDRB, R_W);
+bitClear(DDRD, XSIN_);
+
 
 // mount the SD Card to initiaize Z80-MBC2 - IOS Floppy emulation 
 // see Attribuition at top
@@ -178,13 +242,6 @@ if (mountSD(&filesysSD))
 else Serial.println("...OK!");
 Serial.println();
 Serial.println("HB6809 - HB63C09M Test Build");
-
-// flush the RX buffer to clear spurius inputs due to dongle power up
-// this avoids issues displaying the incomming prompt text.
- while (Serial.available() > 0) 
-  {
-    Serial.read();
-  }
 
 
 // Lets burn this candle! -- System coming out of reset state
@@ -724,7 +781,7 @@ uint8_t busRead(void) {
 
 void busWrite(uint8_t data) {
   DDRA = 0xFF;     // bus is output
-  PORTA = data; // data is on the b
+  PORTA = data; // data is on the bus
 }
 
 //end the current io request
@@ -737,6 +794,63 @@ void busIO(void) {
       interrupts();  // back to it
 }
 
+// this is for configuring the address bus pins.
+
+void ddr_a_nibble(enum PinMode mode) {
+    if (mode == READ_MODE) {
+        DDRC &= ~NIBBLE_MASK;
+    } else if (mode == WRITE_MODE) {
+        DDRC |= NIBBLE_MASK;
+    }
+}
+
+void write_a_nibble(uint16_t data) {
+    // Drop the bits beyond the first 6
+    uint8_t trimmed_data = (uint8_t)(data & ADDRESS_MASK);
+
+    // Clear the current value on PORTC
+    PORTC &= ~NIBBLE_MASK;
+
+    // Write the new value to PORTC
+    PORTC |= (trimmed_data << 2);
+    DO_TWICE_NOP();
+}
+
+
+//write to RAM in staging mode
+void RAMWrite(uint8_t ioData,uint16_t addr) {
+
+    write_a_nibble(addr);  // sets the address bus to the address to write to.
+  
+    bitSet(PORTB, R_W);    // set R_W HIGH to WRITE from the AVR to the bus (this is inverse from the CPU perspective) 
+    busWrite(ioData);      // places the data on the bus          
+    bitSet(DDRD, WR_);     // clock the write pin
+            
+    // we waste some time as at 20Mhz the cycle time is less than the actual needed hold time for the RAM chip. 
+    DO_TWICE_NOP();
+    
+    bitClear(DDRD,WR_);    
+    busTstate();           // tri-state dataport to avoid bus contention 
+}
+
+//Read from ram in staging mode
+uint8_t RAMRead(uint16_t addr) {
+    
+    write_a_nibble(addr);   // sets the address bus to the address to read from 
+    
+    uint8_t ioData = 0;
+    
+    bitClear(PORTB, R_W);   // set the AVR to READ from the bus
+    bitSet(DDRD, RD_);
+    
+    // we waste some time as at 20Mhz the cycle time is less than the actual needed hold time for the RAM chip
+    DO_TWICE_NOP();
+    
+    ioData = busRead();
+    bitClear(DDRD, RD_);
+    busTstate();
+    return(ioData); 
+}
 
 // IOS SD Card routines for Z80-MBC2 floppy emulation See *** Attribution at top ***
 // ------------------------------------------------------------------------------
