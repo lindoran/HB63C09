@@ -1,3 +1,4 @@
+
 // This is very rough - be advised - at any time this could be broken.
 // I will implement a version control mechanic when we get ready to release REV4
 
@@ -170,16 +171,11 @@ bitSet(DDRD, BCLK); // set up the bank clock pin to output
 
 bankReg = 0;        // bank register is reset along with the 63C09 by the avr we need to update the stored value
 
-// flush the RX buffer to clear spurius inputs due to dongle power up
-// this avoids issues displaying the incomming prompt text.
- while (Serial.available() > 0) 
-  {
-    Serial.read();
-  }
-
 
 // **TODO** Figure out how to tell if this is a reset from the switch so this can be eliminated when user presses
-_delay_ms(500);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
+_delay_ms(300
+
+);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
 
 
 // Stageing 
@@ -192,7 +188,7 @@ ddr_a_nibble(WRITE_MODE);  // set the nibble writer to write mode.
 RAMWrite(42,0xFFFF);    //write the meaning of life.
 
 if (RAMRead(0xFFFF) == 42) {
-  Serial.printf("\n\n\nStaging From RAM...");
+  Serial.printf("\nStaging From RAM...");
   
   loaderAddr = blockcopy_blks[0].start;
 
@@ -202,16 +198,15 @@ if (RAMRead(0xFFFF) == 42) {
   }
   // set the reset vector to the begining of the loader
   RAMWrite(0xFF, 0xFFFE);
-  RAMWrite(0xC0, 0xFFFF);
+  RAMWrite(0xC0, 0xFFFF);  
 
-  
-  write_a_nibble(0);      // these two lines put the address bus back to tri state
-  ddr_a_nibble(READ_MODE);
 } else {
-  Serial.println("Staging from ROM...");
+  Serial.println("\nStaging from ROM...");
 }
 
 // run state 
+write_a_nibble(0);      // these two lines put the address bus back to tri state
+ddr_a_nibble(READ_MODE);
 bitClear(DDRD, IOREQ_);
 bitClear(PORTB, R_W);
 bitClear(DDRB, R_W);
@@ -242,6 +237,14 @@ if (mountSD(&filesysSD))
 else Serial.println("...OK!");
 Serial.println();
 Serial.println("HB6809 - HB63C09M Test Build");
+
+
+// flush the RX buffer to clear spurius inputs due to dongle power up
+// this avoids issues displaying the incomming prompt text.
+ while (Serial.available() > 0) 
+  {
+    Serial.read();
+  }
 
 
 // Lets burn this candle! -- System coming out of reset state
