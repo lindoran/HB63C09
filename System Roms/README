@@ -1,0 +1,22 @@
+A Simple Combination MON09 and BASIC ROM 
+
+This Combines David Dunfields Mon09 and a Floating Point Basic Port as modified by Johnny Quest for his 
+original 6809sbc.
+
+See:  https://6809sbc.wordpress.com/
+
+The complie automation is mostly Johnny Quest's work, but its been modified to work with the DigiCoolThings basic 
+rom.
+
+I have included a slightly modified version of basic that was coaxed to complie with asm6809 done by 
+Digicool things: 
+
+https://digicoolthings.com/minimalist-europe-card-bus-mecb-some-6809-basic-fun/
+
+
+Required to build these: 
+
+SRecord (srec-cat)
+asm6809
+LWTOOLS
+
