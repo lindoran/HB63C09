@@ -1,0 +1,87 @@
+The files contained is this archive are hereby released for anyone to use
+for any reasonable purpose.
+
+If used for any reason resulting in published material, I request that you:
+ - Acknowlege the original author (Dave Dunfield)
+ - Provide information on where this original material may be obtained:
+     https://dunfield.themindfactory.com
+     "Daves Old Computers"
+ - I do NOT require release of derived source code! (but appreciate if you do)
+
+Be advised that I take no responsibility/liability for any use of this code!
+
+This file "COPY.TXT" may be updated from time to time and I may not make the
+effort to rebuild and re-upload existing archives.
+  Best to check back to the one posted on my site!
+
+** Note that some of these files reference my OLD site:  www.dunfield.com
+   As of 2019, it is NOW:  https: //dunfield.themindfactory.com
+
+Dave Dunfield
+
+---------- Additional Notes ----------
+
+This is part of my goal to release 40+ years of "stuff I've written".
+- Almost all of this is "original material".  I tend not to use "open source"
+  or other code written by others (I **ENJOY** writing my own code)!
+
+
+Much of this was designed for and originally run under DOS - most of it will
+work well within DosBox (recomend the version on my site).
+
+
+YES - I do realize that most of this is obsolete in "modern computing",
+but I think it might be useful to some for "learning purposes".
+
+
+This material containes source code + needed build files, and possibly some
+limited documentation.  See Note1!
+
+
+Some of the sources are for DDS released products, some for internal tools,
+some for "quickie" and "one of" utilities, and some for "just fun" stuff.
+
+
+Most of this has not been publically available before, and I've not taken
+the time to make it "look pretty". (You truly "get what you pay for" :-)
+
+
+Many of these sources are intended to be built with my own Micro-C compiler.
+Micro-C runs under DOS (works well in DosBox) and is free on my site!
+
+These sources may require some of my "special" tools to build. Eg: CHT
+ often they create temp files on R: (this is a RAMdisk on my system)
+
+
+Most of this originally contained notices of copyright. I have changed these
+to be references to COPY.TXT (this file).
+- I wrote a program to automatically perform these changes, some of the results
+  which appear on screen may not be "as pretty" - adjust as required.
+
+I've tried to retain the notice date/year .. please keep in mind that files
+written late 70's-early 80's is my "earliest" code and I was not nearly as
+experinced at that time!  See Note2!
+
+
+Note1: More information
+-In cases where I've already published the executable program, I've included
+ only very limited documentation here. For a good understanding of this
+ software, you should look within the "normal" distribution on my site.
+-In cases where I have provided documentation, it may be a .DOC file
+  Note: This a *NOT* a "windows" file - This requires my TYPESET tool!
+
+Note2: Timestamps
+-Don't trust the timestamps on files. In releasing this material I may have
+ "tweaked" the files, also I did much of this under DOSBOX which has no way
+ of setting/preserving timestamps (even COPYied files appear "new").
+-Don't trust timestamps displayed by executables you might build.
+ Some of my software displays the time it was last compiled.
+
+Note3: Support
+-I'm not keen to provide support for this old software.
+ If you can't find anything of mine mentioned herein (or that you know I've
+ written) - please do contact me - I'll see if I can add it.
+
+
+Dave Dunfield   -   https://dunfield.themindfactory.com
+ Search "Dave's Old Computers" and see my "personal" link at bottom.

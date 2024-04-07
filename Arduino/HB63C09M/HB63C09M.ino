@@ -49,7 +49,6 @@ to develop this system see their website at http://pcbway.com
 #include <Wire.h>
 #include <EEPROM.h>
 #include "PetitFS.h"
-#include "hello.h"
 #include "blockcopy.h"
 
 // AVR DATABUS - NOT USED - JUST FOR REFRENCE - 
@@ -100,7 +99,11 @@ const uint8_t NIBBLE_MASK  = 252; // Shifted nibble mask as it appears on the C 
 // Pulls the I/O address off PORTC as a 6-bit nibble
 #define A_NIBBLE ((uint8_t)((PINC & NIBBLE_MASK) >> 2))
 
+
 //Write accsess time - best to not mess with this
+//at 20Mhz a single bit flip is 50ns at 16 it is a bit closer to 60, by introducing this short delay
+//we asure the ram chip has time to respond (accsess time of our RAM is 55ns) regardless of clock
+//speed.
 #define DO_TWICE_NOP() \
 do { \
     __asm__ __volatile__ ("nop\n\t"); \
@@ -122,7 +125,6 @@ void write_a_nibble(uint16_t data);   // forward def, see code block below ex: w
 // File name Defines for IOS
 
 #define   M6X09DISK     "DSxNyy.DSK"  // Generic 6x09 disk name (from DS0N00.DSK to DS9N99.DSK)
-#define   DS_OSNAME     "DSxNAM.DAT"  // File with the OS name for Disk Set "x" (from DS0NAM.DAT to DS9NAM.DAT)
 
 // Global System variables
 
@@ -136,13 +138,15 @@ uint8_t  errCodeSD;                   // Temporary variable to store error codes
 uint8_t  numReadBytes;                // Number of read bytes after a readSD() call
 uint8_t  loaderReg = 0;               // loader register.
 uint16_t loaderAddr= 0;               // this is the loader current address.
+uint16_t biosStart = 0xC000;          // start of the system rom in memory (this will eventually be stored in EEPROM)
+uint16_t biosSize  = 0x4000;          // this is the size to load to memory before reset. (this will eventually be stored in EEPROM)
+char     biosName[11]  = "BIOS.BIN";      // this is the filename in the root of the sd card to load.
 
 const char *  fileNameSD;             // Pointer to the string with the currently used file name
 
 FATFS    filesysSD;                   // Filesystem object (PetitFS library)
 uint8_t  bufferSD[32];                // I/O buffer for SD disk operations (store a "segment" of a SD sector).
 uint8_t  diskName[11] = M6X09DISK;    // String used for virtual disk file name
-char     OsName[11] = DS_OSNAME;      // String used for file holding the OS name  -- TODO *** MULTIPLE OS?? ***
 uint16_t trackSel;                    // Store the current track number [0..511]
 uint8_t  sectSel;                     // Store the current sector number [0..31]
 uint8_t  diskErr = 19;                // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
@@ -173,51 +177,37 @@ bankReg = 0;        // bank register is reset along with the 63C09 by the avr we
 
 
 // **TODO** Figure out how to tell if this is a reset from the switch so this can be eliminated when user presses
-_delay_ms(300
+_delay_ms(300);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
 
-);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
-
-
-// Stageing 
-//Check for ROM / RAM mode 
+// Stageing state
 bitSet(DDRD, XSIN_);   // inhibit the bus tranceiver (tri-state bioreq_)
 bitSet(DDRD, IOREQ_);   // set tranceiver to enable output, bioreq_ = 0
 bitSet(DDRB, R_W);     // set R_W LINE pin to an output
-
 ddr_a_nibble(WRITE_MODE);  // set the nibble writer to write mode.
-RAMWrite(42,0xFFFF);    //write the meaning of life.
 
+// check for configuration 
+RAMWrite(42,0xFFFF);    //write the meaning of life.
+// its ram?
 if (RAMRead(0xFFFF) == 42) {
-  Serial.printf("\nStaging From RAM...");
-  
+  Serial.println("Staging From RAM...");
+  Serial.println("Bootstrap Code loading at 0xFFC0.." );  
   loaderAddr = blockcopy_blks[0].start;
 
   for (unsigned int j = 0; j < blockcopy_blks[0].len; ++j) {
     RAMWrite(blockcopy_blks[0].data[j],loaderAddr);
     loaderAddr++;
   }
+  Serial.println("Setting Reset Vector.");
   // set the reset vector to the begining of the loader
   RAMWrite(0xFF, 0xFFFE);
   RAMWrite(0xC0, 0xFFFF);  
+  
+  // mount the SD Card to initiaize HB63C09 - IOS Floppy emulation 
+  // see Attribuition at top
+  Serial.println();  
 
-} else {
-  Serial.println("\nStaging from ROM...");
-}
-
-// run state 
-write_a_nibble(0);      // these two lines put the address bus back to tri state
-ddr_a_nibble(READ_MODE);
-bitClear(DDRD, IOREQ_);
-bitClear(PORTB, R_W);
-bitClear(DDRB, R_W);
-bitClear(DDRD, XSIN_);
-
-
-// mount the SD Card to initiaize Z80-MBC2 - IOS Floppy emulation 
-// see Attribuition at top
-Serial.println();  
-Serial.print("IOS: Attempting to mount SD Card");
-if (mountSD(&filesysSD))
+  Serial.print("IOS: Attempting to mount SD Card");
+  if (mountSD(&filesysSD))
    // Error mounting. Try again
    {
      errCodeSD = mountSD(&filesysSD);
@@ -234,10 +224,38 @@ if (mountSD(&filesysSD))
      while (errCodeSD);
      Serial.println("IOS: SD Card found!") ;
    }
-else Serial.println("...OK!");
-Serial.println();
-Serial.println("HB6809 - HB63C09M Test Build");
+  else Serial.println("...OK!");
+  Serial.printf("IOS: Mounting %s volume...",biosName);
+  diskErr = openSD(biosName);       // open the bios.bin volume
+  if (diskErr) {
+    printErrSD(1,diskErr,biosName); // print error message
+    Serial.println(" ... Halt!");
+    while(1);  // halt.
+  }
+  // seek to 0 just in case 
+  diskErr = seekSD(0);
+   if (diskErr) {
+    printErrSD(4,diskErr,biosName); // print error message
+    Serial.println(" ... Halt!");
+    while(1);  // halt.
+  }
+} else {  // its ROM...
+  Serial.println("\nStaging from ROM...");
 
+}
+
+Serial.println();
+Serial.println("Switching Bus Mastering to HC63C09....");
+// run state 
+write_a_nibble(0);      
+ddr_a_nibble(READ_MODE); // address bus should be tri-stated
+bitClear(DDRD, IOREQ_);
+bitClear(PORTB, R_W);
+bitClear(DDRB, R_W);
+bitClear(DDRD, XSIN_);
+
+
+Serial.println("63C09 is now on the bus");
 
 // flush the RX buffer to clear spurius inputs due to dongle power up
 // this avoids issues displaying the incomming prompt text.
@@ -260,10 +278,11 @@ bitClear(DDRB, HALT_);
 
 void loop(){
   // clean up LOADER 
-  if ((ioByteCnt > (hello_blks[0].len+4)) && ( loaderReg = 255) ) {
+  //if ((ioByteCnt > (hello_blks[0].len+4)) && ( loaderReg = 255) ) {
+  if  ((ioByteCnt > (biosSize+4)) && ( loaderReg = 255) ) { 
       // we are done loading the data and must reset or the computer will hang.
       loaderReg = 0; // re-lock the loader
-      ioByteCnt = 0; // reset the byte count - we are done. even if we start a new operation we need to be at zed
+      ioByteCnt = 0; // reset the byte count - we are done. even if we start a new operation we need to be at 0
       bitSet(DDRB, RES_);
       bitClear(DDRB, RES_);
     }
@@ -378,11 +397,11 @@ void loop(){
               //
               //                I/O DATA 0:  D7 D6 D5 D4 D3 D2 D1 D0
               //                            ---------------------------------------------------------
-              //                             D7 D6 D5 D4 D3 D2 D1 D0    Track number (binary) LSB [0..255]
+              //                             D7 D6 D5 D4 D3 D2 D1 D0    Track number (binary) MSB [0..1]
               //
               //                I/O DATA 1:  D7 D6 D5 D4 D3 D2 D1 D0
               //                            ---------------------------------------------------------
-              //                             D7 D6 D5 D4 D3 D2 D1 D0    Track number (binary) MSB [0..1]
+              //                             D7 D6 D5 D4 D3 D2 D1 D0    Track number (binary) LSB [0..255]
               //
               //
               // Stores the selected track number into "trackSel" for "disk file" access.
@@ -396,16 +415,19 @@ void loop(){
               // NOTE 1: Allowed track numbers are in the range [0..511] (512 tracks)
               // NOTE 2: Before a WRITESECT or READSECT operation at least a SELSECT or a SELTRAK operation
               //         must be performed
+              // NOTE 3: Big endian numbering so MSB is written first. (this differs from the Z80MBC and the V20MBC)
+
   
               if (!ioByteCnt)
-              // LSB
-              {
-                trackSel = busData;
-              }
-              else
               // MSB
               {
-                trackSel = (((word) busData) << 8) | lowByte(trackSel);
+                trackSel = ((word)busData) << 8;
+              }
+              else
+              // LSB
+              {
+                trackSel |= busData;
+
                 if ((trackSel < 512) && (sectSel < 32))
                 // Sector and track numbers valid
                 {
@@ -535,8 +557,8 @@ void loop(){
                   loaderReg = 0;
                   }
                   else loaderReg = 0;
-                  
                   break;
+                  
                 case 0xff:
                   //unlock the register
                   loaderReg = 0xFF;
@@ -719,27 +741,43 @@ void loop(){
                   switch(ioByteCnt) {
                     case 0x00:
                       // send the start address MSB
-                      busData = (hello_blks[0].start >> 8) & 0xFF;
-                      
+                      //busData = (hello_blks[0].start >> 8) & 0xFF;
+                      busData = highByte(biosStart);
+
                     break; // will this break
                     case 0x01:
-                     // send the start address LSB
-                      busData = hello_blks[0].start & 0xFF;
-                      
+                      // send the start address LSB
+                      //busData = hello_blks[0].start & 0xFF;
+                      busData = lowByte(biosStart);
+
                     break;
                     case 0x02:
-                     // send the number of bytes to read MSB
-                      busData = (hello_blks[0].len >> 8) & 0xFF;
+                      // send the number of bytes to read MSB
+                      //busData = (hello_blks[0].len >> 8) & 0xFF;
+                      busData = (biosSize >> 8) & 0xFF;
 
                     case 0x03:
-                     // send the number of bytes to read LSB
-                      busData = hello_blks[0].len & 0xFF; 
+                      // send the number of bytes to read LSB
+                      //busData = hello_blks[0].len & 0xFF;
+                      busData = biosSize & 0xFF;
+
                     break;
                     
                     default:
                       //send the data                          
-                      busData = hello_blks[0].data[ioByteCnt-4];
-                      
+                      //busData = hello_blks[0].data[ioByteCnt-4];
+                      if (!diskErr)
+                      // No previous error (e.g. selecting disk, track or sector)
+                      {
+                        tempByte = (ioByteCnt-4) % 32;        // [0..31]
+                        if (!tempByte)
+                        // Read 32 bytes of the current sector on SD in the buffer (every 32 calls, starting with the first)
+                        {
+                          diskErr = readSD(bufferSD, &numReadBytes); 
+                          if (numReadBytes < 32) diskErr = 19;    // Reached an unexpected EOF
+                        }
+                        if (!diskErr) busData = bufferSD[tempByte];// If no errors, exchange current data byte with the CPU
+                      }
                     break;  
                   }
                   ioByteCnt++; 

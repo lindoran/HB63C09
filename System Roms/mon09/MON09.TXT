@@ -1,0 +1,548 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                     MON09
+
+                                       A
+                             Software Debug Monitor
+
+                                  For the 6809
+
+
+
+
+
+
+
+
+
+
+                          Dunfield Development Systems
+                          ----------------------------
+                             High quality tools for
+                              Embedded Development
+                                 at low prices.
+
+                            http://www.dunfield.com
+
+
+                       ?COPY.TXT 1985-2007 Dave Dunfield
+                              **See COPY.TXT**
+
+
+
+                                     MON09
+
+                               TABLE OF CONTENTS
+
+
+                                                                         Page
+
+     1. INTRODUCTION                                                        1
+
+
+     2. USING MON09                                                         2
+
+        2.1 Operand format                                                  2
+        2.2 Monitor Commands                                                2
+        2.3 Display Output                                                  6
+        2.4 Breakpoints                                                     6
+        2.5 Non-Maskable Interrupt                                          6
+
+     3. MON09 INTERNALS                                                     7
+
+        3.1 Reserved Memory Locations                                       7
+        3.2 I/O Configuration Control Byte                                  7
+        3.3 Monitor Subroutines                                             8
+
+     4. SAMPLE I/O ROUTINES                                                10
+
+    MON09                                                            Page: 1
+
+
+    1. INTRODUCTION
+
+          MON09 is an interactive software  debugger  and  machine  language
+       monitor  for  the   motorola   6809   microprocessor.   It   contains
+       display/alter memory/register facilities,  as well  as  a  full  6809
+       disassembler,  breakpoint,  and  software  single   step   functions.
+       Download and transparent communication modes are also included.
+
+          MON09  requires  no  hardware  assist,  all  functions   including
+       single-step are implemented in the  MON09  firmware.  MON09  requires
+       three  user  supplied  subroutines  for  interfacing  to  the  system
+       hardware. The required routines are as follows:
+
+         INIT - Initializes a serial port (uart).  The address of the device
+                to initialize is passed in the 'X'  register.  All processor
+                registers may by modified.
+
+         READ - Test for a character from the uart (address in 'X'),  and if
+                found, return it in ACCA, with the 'Z' flag set.  Otherwise,
+                return with $FF in  ACCA,  and  'Z'  flag  clear.  No  other
+                registers may be modified.
+
+        WRITE - Writes the character in ACCA to the uart  (address in  'X').
+                The 'B' and 'X' registers only may be modified.
+
+          MON09 requires 160 bytes of read/write memory,  for  stack,  local
+       variables,  buffers etc,  and about 5900 bytes of ROM memory for  the
+       program.  If MON09 is placed in an 8K (2764 or compatable) rom,  this
+       will leave over 2k of space for the user I/O routines.  The MON09 rom
+       must be at the top of the 6809 memory map,  as it has to control  the
+       6809 interrupt vectors.
+    MON09                                                            Page: 2
+
+
+    2. USING MON09
+
+       2.1 Operand format
+
+        Anywhere that MON09 expects an 8 bit value, you may use:
+
+            Two HEX digits                              Eg: 1F
+            A QUOTE followed by an ASCII character      Eg: 'a
+
+        Anywhere that MON09 expects a 16 bit value, you may use:
+
+            Four HEX digits                             Eg: 09AB
+            ASCII characters preceeded by quotes        Eg: 'a'b
+            X, Y, U, P, or S for current CPU register   EG: X
+
+       2.2 Monitor Commands
+
+             The following commands are implemented in the monitor.
+
+               B <breakpoint#> <address>
+
+                  Set breakpoint at specified address. Breakpoint is removed
+                  if address is 0000.  There can be up to eight breakpoints,
+                  which are referenced by the numbers 0 to 7.
+
+               CR <register> <value>
+
+                  Changes  6809  registers  values.  Register  is  a  single
+                  character, which may be as follows:
+
+                  A   - Set A accumulator (8 bit value).
+                  B   - Set B accumulator (8 bit value).
+                  C   - Set condition code register (8 bit value).
+                  D   - Set direct page register (8 bit value).
+                  X   - Set X register (16 bit value).
+                  Y   - Set Y register (16 bit value).
+                  U   - Set user stack pointer (16 bit value).
+                  S   - Set system stack pointer (16 bit value).
+                  P   - Set program counter (16 bit value).
+                  sp  - (SPACE) Set D accumulator (16 bit value).
+
+               CU <uart#> <address>
+
+                     Changes the uart address assignments.  The uart  number
+                  is  '1'  for the main console,  or  '2'  for the auxiliary
+                  uart.  When a new  uart  address  is  assigned,  the  INIT
+                  routine is automatically called to initialize the device.
+    MON09                                                            Page: 3
+
+
+               CV <vector> <address>
+
+                     Changes the interrupt  vector  handler  addresses.  The
+                  vectors are as follows:
+
+                  1 or 'S' - SWI  (Software Interrupt) vector
+                  2        - SWI2 (Software Interrupt 2) vector
+                  3        - SWI3 (Software Interrupt 3) vector
+                  4 or 'I' - IRQ  (Interrupt Request) vector
+                  5 or 'F' - FIRQ (Fast Interrupt Request) vector
+
+               DB
+
+                  Displays the current breakpoint settings.
+
+               DI <start>,<end>
+
+                  Disassembles memory,  starting at  indicated  address.  If
+                  SPACE  is  entered  for  <end>  address,   assumes   FFFF.
+                  Disassembler output contains address, opcodes bytes, ASCII
+                  equivalent of  opcode  bytes,  instruction  neumonic,  and
+                  operands to instruction.
+
+               DM <start>,<end>
+
+                  Displays memory, in HEX/ASCII dump format, starting at the
+                  indicated  address.  If  a  SPACE  is  entered  for  <end>
+                  address, assumes FFFF.
+
+               DR
+
+                  Displays the values of the 6809 registers.
+
+               DU
+
+                  Displays the current uart address assignments.
+
+               DV
+
+                  Display the current interrupt vector address assignments.
+
+               E <address>
+
+                  Edit's memory,  Address and contents are displayed,  Enter
+                  two hex digits to change value, or a single quote followed
+                  by a character. Entering SPACE skips to the next location,
+                  BACKSPACE  backups  to  the  previous  location.  CARRIAGE
+                  RETURN terminates the edit command.
+
+               FM <start>,<end> <value>
+
+                  Fill's memory from <start> to <end> with the byte <value>.
+    MON09                                                            Page: 4
+
+
+               G <address>
+
+                  Begins execution at the indicated address.  If a SPACE  is
+                  entered instead of an address,  begins  execution  at  the
+                  address in the saved 6809 program counter.
+
+               L
+
+                  Downloads data from the auxiliary port,  which may  be  in
+                  either MOTOROLA or INTEL hex format.
+
+               MM <start>,<end> <destination>
+
+                  Move's memory  from  <start>  to  <end>,  placeing  it  at
+                  <destination>.
+
+               MT <start>,<end>
+
+                  Performs a memory test on memory from  <start>  to  <end>.
+                  Pass number is displayed,  First two digits indicate total
+                  number completed tests,  last two digits indicate  current
+                  pass  (value)  within the  test.  Each  value  is  written
+                  sequentially to memory,  insuring that previous  data  has
+                  not changed before the new value is written.  To exit  the
+                  test, press the escape key.
+
+               RR <address>
+
+                  This command loops,  performing a read  of  the  specified
+                  address until it is terminated by the escape key.
+
+               RW <address> <value>
+
+                  This  command  loops,  writing  the  given  value  to  the
+                  specified address until it is  terminated  by  the  escape
+                  key.
+
+               S <address>
+
+                  Begins single-stepping at  the  indicated  address.  If  a
+                  SPACE is entered for  the  address,  then  single-stepping
+                  begins at the address in the saved 6809  program  counter.
+                  Disassembled instruction is displayed on the terminal, and
+                  MON09 waits for a  key  to  be  pressed.  If  a  SPACE  is
+                  entered,  steps to the next instruction.  CARRIAGE  RETURN
+                  toggles the automatic display of registers.  '?'  displays
+                  the register values, and escape terminates the single-step
+                  command.
+
+               T
+
+                  Enters  transparent  communication  mode,   passing   data
+                  between the terminal and  the  auxiliary  port.  Enter  an
+                  ESCAPE to exit.
+    MON09                                                            Page: 5
+
+
+               W <address> <value>
+
+                  Performs  a  single  write  of  the  given  value  to  the
+                  specified address in memory.
+
+               XR <address>
+
+                  As 'RR' command, except that a 16 bit value is read.
+
+               XW <address> <word value>
+
+                  As 'RW' command, except that a 16 bit value is written.
+
+               + <value>+<value>
+
+                  Performs 16 bit addition of the values,  and displays  the
+                  result.
+
+               - <value>-<Value>
+
+                  Performs 16 bit subtraction of the  values,  and  displays
+                  the result.
+
+               ?
+
+                  Displays a short help summary of the commands.
+    MON09                                                            Page: 6
+
+
+       2.3 Display Output
+
+             In order to maintain the maximum amount of data on the terminal
+          screen during the debugging session,  MON09 has been  designed  to
+          minimize the number of screen lines in any display.  All  commands
+          which output only one line of data (such as 'DR' 'DV'), will do so
+          on the same line on which the command is issued  (To the right  of
+          the command).
+
+             For commands which output larger amounts of data (such as 'DI',
+          'DM),  pressing the SPACE key during the  display  will  halt  the
+          display on the next line. Each subsequent SPACE entered will cause
+          one more line of data be displayed.  Pressing CARRIAGE RETURN will
+          allow the display to continue at full speed.
+
+             The escape key may be used to cancel command output, and return
+          to the '*' prompt.
+
+       2.4 Breakpoints
+
+             MON09 allows breakpoints to be  placed  in  the  program  under
+          test, which when encountered during the execution of that program,
+          cause the program to interrupt, and MON09 is entered. Up to 8 such
+          breakpoints (numbered from 0 to 7) may be placed in the program at
+          any one time.
+
+             When entered from a breakpoint,  MON09  will  first  display  a
+          message  indicating  the  number  of  the  breakpoint  which   was
+          encountered,  followed by the  processor  registers,  after  which
+          MON09 enters command mode.
+
+             Once MON09 has been entered from a breakpoint, the registers of
+          the program under test are saved.  Note that the  address  of  the
+          breakpoint is in the saved 6809  program  counter,  and  therefore
+          using a SPACE as the operand to a 'G'  or  'S'  command will allow
+          execution or single stepping to continue from the breakpoint.
+
+             Breakpoints are entirely transparent,  and will remain  in  the
+          program until explicitly removed.
+
+       2.5 Non-Maskable Interrupt
+
+             Whenever  a  Non-Maskable  interrupt  occurs,  MON09   performs
+          processing similar to that of a breakpoint.  A message  indicating
+          NMI has occured is displayed, followed by the processor registers,
+          after which MON09 enters command mode.
+
+             Execution following NMI can be resumed by using a SPACE as  the
+          operand to a 'G' or 'S' command, exactly as with a breakpoint.
+    MON09                                                            Page: 7
+
+
+    3. MON09 INTERNALS
+
+       3.1 Reserved Memory Locations
+
+             The following locations are located in the 160 bytes of  memory
+          which are reserved for MON09:
+
+    Offset|Size|  Name  |                   Description
+    ------+----+--------+------------------------------------------------
+     0000 | 02 | SWIADR | Contains address for SWI interrupt vector.
+    ------+----+--------+------------------------------------------------
+     0002 | 02 |SWI2ADR | Contains address for SWI2 interrupt vector.
+    ------+----+--------+------------------------------------------------
+     0004 | 02 |SWI3ADR | Contains address for SWI3 interrupt vector.
+    ------+----+--------+------------------------------------------------
+     0006 | 02 | IRQADR | Contains address for IRQ interrupt vector.
+    ------+----+--------+------------------------------------------------
+     0008 | 02 |FIRQADR | Contains address for FIRQ interrupt vector.
+    ------+----+--------+------------------------------------------------
+     000A | 01 | IOCON  | Input/Output configuration control byte.
+    ------+----+--------+------------------------------------------------
+     000B | 02 | UART1  | Address of console uart device.
+    ------+----+--------+------------------------------------------------
+     000D | 02 | UART2  | Address of auxiliary uart device.
+    ------+----+--------+------------------------------------------------
+     000F | 01 | SAVCC  | MON09's saved Condition Code register.
+    ------+----+--------+------------------------------------------------
+     0010 | 01 |  SAVA  | MON09's saved A Accumulator register.
+    ------+----+--------+------------------------------------------------
+     0011 | 01 |  SAVB  | MON09's saved B Accumulator register.
+    ------+----+--------+------------------------------------------------
+     0012 | 01 | SAVDP  | MON09's saved Direct Page register.
+    ------+----+--------+------------------------------------------------
+     0013 | 02 |  SAVX  | MON09's saved X Index register.
+    ------+----+--------+------------------------------------------------
+     0015 | 02 |  SAVY  | MON09's saved Y Index register.
+    ------+----+--------+------------------------------------------------
+     0017 | 02 |  SAVU  | MON09's saved User Stack Pointer.
+    ------+----+--------+------------------------------------------------
+     0019 | 02 |  SAVS  | MON09's saved Program Counter.
+    ------+----+--------+------------------------------------------------
+     0021 | 02 | SAVPC  | MON09's saved System Stack Pointer.
+
+       3.2 I/O Configuration Control Byte
+
+             MON09 maintains a control byte,  which directs I/O to and  from
+          the console and aux serial ports.  The definition of bits in  this
+          byte is as follows:
+
+         Bit#   7  - Indicates output is flow-controlled (Via SPACE).
+              3-6  - Not used.
+                2  - 1= Output to AUX port.
+                1  - 1= Output to console.
+                0  - 1= Input from console, 0=Input from AUX port.
+    MON09                                                            Page: 8
+
+
+       3.3 Monitor Subroutines
+
+             The following subroutines are available to user  programs  from
+          MON09:
+
+    Name   | Registers |                    Description
+    -------+-----------+-----------------------------------------------------
+    GETCHR |     A     | Reads character from selected input device,  returns
+           |           | in ACCA.
+    -------+-----------+-----------------------------------------------------
+    GETECH |     A     | Reads and echos char. from  selected  input  device,
+           |           | converts it to capital, and returns in ACCA.
+    -------+-----------+-----------------------------------------------------
+    GETNIB |     A     | Gets a single hex nibble from selected input device,
+           |           | and returns in ACCA. Sets 'Z' flag if successful.
+    -------+-----------+-----------------------------------------------------
+    GETBYT |     A     | Gets a single hex byte from selected  input  device,
+           |           | and returns in ACCA. Sets 'Z' flag is successful.
+    -------+-----------+-----------------------------------------------------
+    GETADR |    A,B    | Gets a hex word  from  selected  input  device,  and
+           |           | returns in D accumulator. Sets 'Z' if successful.
+    -------+-----------+-----------------------------------------------------
+    GETRNG |   A,B,X   | Gets an address range from  selected  input  device,
+           |           | first address is returned in 'X', and second address
+           |           | is returned in 'D'. Sets 'Z' if successful.
+    -------+-----------+-----------------------------------------------------
+    CHKCHR |     A     | Checks for character from terminal, and  returns  in
+           |           | ACCA if found, otherwise returns $FF.  Sets 'Z' flag
+           |           | If character is found, and is the escape character.
+    -------+-----------+-----------------------------------------------------
+    PUTCHR |   None    | Writes character in ACCA to all enabled output devs.
+    -------+-----------+-----------------------------------------------------
+    SPACE  |   None    | Writes a space to all enabled output devices.
+    -------+-----------+-----------------------------------------------------
+    LFCR   |   None    | Writes a  line-feed,  Carriage-return  pair  to  all
+           |           | enabled output devices.
+    -------+-----------+-----------------------------------------------------
+    HOUT   |     A     | Outputs nibble in ACCA to output devices in HEX.
+    -------+-----------+-----------------------------------------------------
+    HEXOUT |     A     | Outputs byte in ACCA to output devices in HEX.
+    -------+-----------+-----------------------------------------------------
+    WRDOUT |     A     | Outputs word in ACCD to output devices in HEX.
+    -------+-----------+-----------------------------------------------------
+    WRLIN  |    A,X    | Outputs message string pointed to by  X  to  enabled
+           |           | output devices. String ends with null ($00) or  with
+           |           | Carriage-Return ($0D). If strings ends with Carriage
+           |           | Return, then LFCR is displayed at end.
+    -------+-----------+-----------------------------------------------------
+    WRMSG  |     A     | Same as above, except message string in inline  with
+           |           | code, and immediatly follows call to WRMSG.
+    -------+-----------+-----------------------------------------------------
+    DLOAD  |   A,B,X   | Downloads one record of a motorola hex  format  file
+           |           | from the selected input device. Sets 'C'  if  record
+           |           | was NOT an end of file record.
+    -------+-----------+-----------------------------------------------------
+    MON09                                                            Page: 9
+
+
+    -------+-----------+-----------------------------------------------------
+    LOAD   |   A,B,X   | Selects AUX input, and downloads entire motorola hex
+           |           | format file. Prints '.' for every record received.
+    -------+-----------+-----------------------------------------------------
+    DISASS |  A,B,X,Y  | Disassembles opcode pointed to by Y, and placed  the
+           |           | disasembler output text in memory pointed to by U.
+           |           | disassembler output text ends with carriage return.
+           |           | Y is left pointing to next opcode in memory.
+    -------+-----------+-----------------------------------------------------
+    STEP   | A,B,X,Y,U | Steps one instruction, from address in saved program
+           |           | counter. All saved registers are updated.
+    -------+-----------+-----------------------------------------------------
+    STEPDI | A,B,X,Y,U | Same as above, except  disassembled  instruction  is
+           |           | Displayed.
+    -------+-----------+-----------------------------------------------------
+    DISREG | A,B,X,Y,U | Displays all of the saved registers.
+    -------+-----------+-----------------------------------------------------
+    MONITOR|    N/A    | Reenters the monitor.
+    -------+-----------+-----------------------------------------------------
+    MON09                                                            Page: 10
+
+
+    4. SAMPLE I/O ROUTINES
+
+          The following are sample I/O routines for MON09:
+
+       *
+       * MACHINE DEPENDANT I/O ROUTINES FOR 6551 UARTS
+       *
+       * INITIALIZE UART(X)
+       INIT    CLR     1,X         RESET
+               LDA     #$AB        MARK PAR, ENABLE RX, TX
+               STA     2,X         WRITE COMMAND REG
+               LDA     #$3E        9600 BAUD, 7 BITS
+               STA     3,X         WRITE CONTROL REGISTER
+               RTS
+       * READ UART(X)
+       READ    LDA     1,X         GET STATUS
+               BITA    #$08        RECEIVER READY?
+               BEQ     NOCHR       NO CHARACTER
+               LDA     ,X          READ CHARAC>uR
+               ORCC    #$04        SET 'Z'
+               RTS
+       NOCHR   LDA     #$FF        NO CHAR
+               RTS
+       * WRITE UART(X)
+       WRITE   LDB     1,X         GET STATUS
+               BITB    #$10        XMITTER READY?
+               BEQ     WRITE       NO, TRY AGAIN
+               STA     ,X          OUTPUT
+               RTS
+
+       *
+       * MACHINE DEPENDANT I/O ROUTINES FOR 6552 UARTS
+       *
+       * INITIALIZE UART(X)
+       INIT    LDA     #%01001101  9600 BAUD, 1 STOP BIT, NO ECHO
+               STA     1,X         WRITE CONTROL REGISTER
+               CLR     2,X         INSURE NO BREAK CONDITION
+               LDA     #%11010100  7 BITS, MARK PARITY, DTR ON, RTS ON
+               STA     1,X         WRITE FORMAT REGISTER
+               RTS
+       * READ UART(X)
+       READ    LDA     ,X          GET STATUS
+               BITA    #%00000001  RECEIVER READY?
+               BEQ     NOCHR       NO CHARACTER
+               LDA     3,X         READ CHARACTER
+               ORCC    #$04        SET 'Z'
+               RTS
+       NOCHR   LDA     #$FF        NO CHAR
+               RTS
+       * WRITE UART(X)
+       WRITE   LDB     ,X          GET STATUS
+               BITB    #%01000000  XMITTER READY?
+               BEQ     WRITE       NO, TRY AGAIN
+               STA     3,X         OUTPUT
+               RTS
