@@ -71,9 +71,9 @@ SKP1LD    EQU  $86           ;OP CODE OF LDA # - SKIP THE NEXT BYTE
 *                            ;AND LOAD THE VALUE OF THAT BYTE INTO ACCA ' THIS
 *                            ;IS USUALLY USED TO LOAD ACCA WITH A NON ZERO VALUE 
 
-; THIS BIT IS FOR INIT OF THE 6850 - IT IS NOT NEEDED ON THE HB63C09
 
-;RTS_LOW   EQU  $11	; Originally $95 (8 bits + 1 Stop, RTS Low, Enabled Interrupts)
+
+RTS_LOW   EQU  $15	; Originally $95 (8 bits + 1 Stop, RTS Low, Enabled Interrupts)
 			; Use $11 for 8 bits + 2 Stop, RTS Low, Disable Interrupts
 			; Or $15 for 8 bits + 1 Stop, RTS Low, Disable Interrupts
 
@@ -346,8 +346,8 @@ L8031     STU  ,X++          ;STORE 'FC' ERROR AT USR ADDRESSES
 
 ;; THIS BIT NOT REQURED FOR HB63C09 
 ;;* INITIALISE ACIA
-;;          LDA  #RTS_LOW      ;DIV16 CLOCK -> 7372800 / 4 / 16 = 115200
-;;          STA  UCTRL
+          LDA  #RTS_LOW      ;DIV16 CLOCK -> 7372800 / 4 / 16 = 115200
+          STA  UCTRL
 
           LDX  #LA147-1      ;POINT X TO COLOR BASIC COPYRIGHT MESSAGE 
           JSR  LB99C         ;PRINT 'COLOR BASIC'

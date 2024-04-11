@@ -354,10 +354,10 @@ E4D1 0D0A             (     mon09v37.asm):00352                 FCB     $0D,$0A
                       (     mon09v37.asm):00353         
                       (     mon09v37.asm):00354         ;       INCLUDE A DATE OF BUILD STRING
                       (     mon09v37.asm):00355                 INCLUDE datestring.asm
-E4D3 4275696C643A2032 (   datestring.asm):00001                 FCC     'Build: 2024-0406 @22:43:42 CDT'
-     3032342D30343036
-     204032323A34333A
-     343220434454
+E4D3 4275696C643A2032 (   datestring.asm):00001                 FCC     'Build: 2024-0411 @13:49:48 CDT'
+     3032342D30343131
+     204031333A34393A
+     343820434454
                       (     mon09v37.asm):00356         
 E4F1 0D0A             (     mon09v37.asm):00357                 FCB     $0D,$0A
 E4F3 284329313938352D (     mon09v37.asm):00358                 FCC     '(C)1985-2007 Dave Dunfield'
