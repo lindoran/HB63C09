@@ -108,7 +108,7 @@ const char DEFAULT_BIOS_NAME[] = "BIOS.BIN";
 const int BIOS_START_ADDR = 0;
 const int BIOS_SIZE_ADDR = sizeof(uint16_t);                  // normally 2
 const int BIOS_NAME_ADDR = BIOS_SIZE_ADDR + sizeof(uint16_t); // normally 4
-const int CHECKSUM_ADDR = BIOS_NAME_ADDR + 11; // Assuming 11 bytes for biosName and 1 byte for '\0'
+const int CHECKSUM_ADDR = BIOS_NAME_ADDR + 11;                // Assuming 11 bytes for biosName and 1 byte for '\0'
 
 //RAM Write accsess time - best to not mess with this
 //at 20Mhz a single bit flip is 50ns at 16 it is a bit closer to 60, by introducing this short delay
@@ -199,20 +199,40 @@ RAMWrite(42,0xFFFF);    //write the meaning of life.
 // its ram?
 if (RAMRead(0xFFFF) == 42) {
   Serial.println("Staging From RAM...");
-  Serial.println("Bootstrap Code loading at 0xFFC0.." );  
+  Serial.println("Bootstrap Code loading at 0xFFC0..." );  
   loaderAddr = blockcopy_blks[0].start;
 
   for (unsigned int j = 0; j < blockcopy_blks[0].len; ++j) {
     RAMWrite(blockcopy_blks[0].data[j],loaderAddr);
     loaderAddr++;
   }
-  Serial.println("Setting Reset Vector.");
+  Serial.println("Setting Reset Vector...");
   // set the reset vector to the begining of the loader
   RAMWrite(0xFF, 0xFFFE);
   RAMWrite(0xC0, 0xFFFF);  
   
   // mount the SD Card to initiaize HB63C09 - IOS Floppy emulation 
   // see Attribuition at top
+  Serial.print("IOS: Attempting to mount SD Card");
+  if (mountSD(&filesysSD))
+   // Error mounting. Try again
+   {
+     errCodeSD = mountSD(&filesysSD);
+     errCodeSD = mountSD(&filesysSD);
+     if (errCodeSD)
+     // Error again. Repeat until error disappears (or the user forces a reset)
+     do
+     {
+       printErrSD(0, errCodeSD, NULL);
+       waitKey();                                // Wait a key to repeat
+       mountSD(&filesysSD);                      // New double try
+       errCodeSD = mountSD(&filesysSD);
+     }
+     while (errCodeSD);
+     Serial.println("IOS: SD Card found!") ;
+   }
+  else Serial.println("...OK!");
+  // Check EEPROM CONTENTS
   Serial.println();  
   Serial.println("ATMEGA32 EEPROM Details:");
   // Read from EEPROM
@@ -265,28 +285,10 @@ if (RAMRead(0xFFFF) == 42) {
       }
       EEPROM.write(CHECKSUM_ADDR, calculatedChecksum);
   }
-
-  Serial.print("IOS: Attempting to mount SD Card");
-  if (mountSD(&filesysSD))
-   // Error mounting. Try again
-   {
-     errCodeSD = mountSD(&filesysSD);
-     errCodeSD = mountSD(&filesysSD);
-     if (errCodeSD)
-     // Error again. Repeat until error disappears (or the user forces a reset)
-     do
-     {
-       printErrSD(0, errCodeSD, NULL);
-       waitKey();                                // Wait a key to repeat
-       mountSD(&filesysSD);                      // New double try
-       errCodeSD = mountSD(&filesysSD);
-     }
-     while (errCodeSD);
-     Serial.println("IOS: SD Card found!") ;
-   }
-  else Serial.println("...OK!");
+  
+  
   Serial.printf("IOS: Mounting %s volume...",biosName);
-  diskErr = openSD(biosName);       // open the bios.bin volume
+  diskErr = openSD(biosName);       // open the bios volume
   if (diskErr) {
     printErrSD(1,diskErr,biosName); // print error message
     Serial.println(" ... Halt!");
@@ -305,7 +307,7 @@ if (RAMRead(0xFFFF) == 42) {
 }
 
 Serial.println();
-Serial.println("Switching Bus Mastering to HC63C09....");
+Serial.println("Switching Bus Mastering to HC63C09...");
 // run state 
 write_a_nibble(0);      
 ddr_a_nibble(READ_MODE); // address bus should be tri-stated
@@ -315,7 +317,7 @@ bitClear(DDRB, R_W);
 bitClear(DDRD, XSIN_);
 
 
-Serial.println("HC63C09 is now on the bus");
+Serial.println("HC63C09 is now on the bus...");
 
 // flush the RX buffer to clear spurius inputs due to dongle power up
 // this avoids issues displaying the incomming prompt text.
@@ -337,20 +339,11 @@ bitClear(DDRB, HALT_);
 // Main loop
 
 void loop(){
-  // clean up LOADER 
-  //if ((ioByteCnt > (hello_blks[0].len+4)) && ( loaderReg = 255) ) {
-  if  ((ioByteCnt > (biosSize+4)) && ( loaderReg = 255) ) { 
-      // we are done loading the data and must reset or the computer will hang.
-      loaderReg = 0; // re-lock the loader
-      ioByteCnt = 0; // reset the byte count - we are done. even if we start a new operation we need to be at 0
-      bitSet(DDRB, RES_);
-      bitClear(DDRB, RES_);
-    }
   // checking for IOREQ_
   if (!(bitRead(PIND, IOREQ_))) { 
       if (!(bitRead(PIND, XSIN_))) {
         busIO();  // end early for expansion bus IO
-        ioByteCnt = 0;  // reset multi-op counter this can't be a multi step function.
+        lastOp = 255;    // this just makes sure the bytecount logic is reset cleanly
       }
       else {
        curOp = (bitRead(PINB, R_W) << NIBBLE_BITS) | A_NIBBLE;  // read R_W and the address bus
@@ -607,18 +600,32 @@ void loop(){
 
              case 0x3E:
               // LOADERR
-              // The loader register is only used durring boot up, 
                switch(busData) {
                 case 0x01:
                   //reset the system
                   if (loaderReg == 0xFF) {  
+                  busIO();
                   bitSet(DDRB, RES_);
                   bitClear(DDRB, RES_);  // system will reset at the end of the IO request.
                   loaderReg = 0;
                   }
                   else loaderReg = 0;
                   break;
-                  
+                
+                case 0x02:
+                  //halt the system
+                  if (loaderReg == 0xFF) {
+                    busIO();
+                    bitSet(DDRB, HALT_);
+                    Serial.println("\n System Halted.");
+                    while(0);  // infinate loop.
+                  } 
+                  else {
+                    loaderReg = 0;
+
+                  } 
+                  break;
+
                 case 0xff:
                   //unlock the register
                   loaderReg = 0xFF;
@@ -801,33 +808,28 @@ void loop(){
                   switch(ioByteCnt) {
                     case 0x00:
                       // send the start address MSB
-                      //busData = (hello_blks[0].start >> 8) & 0xFF;
                       busData = highByte(biosStart);
 
                     break; // will this break
                     case 0x01:
                       // send the start address LSB
-                      //busData = hello_blks[0].start & 0xFF;
                       busData = lowByte(biosStart);
 
                     break;
                     case 0x02:
                       // send the number of bytes to read MSB
-                      //busData = (hello_blks[0].len >> 8) & 0xFF;
                       busData = (biosSize >> 8) & 0xFF;
 
                     case 0x03:
                       // send the number of bytes to read LSB
-                      //busData = hello_blks[0].len & 0xFF;
                       busData = biosSize & 0xFF;
 
                     break;
                     
                     default:
                       //send the data                          
-                      //busData = hello_blks[0].data[ioByteCnt-4];
                       if (!diskErr)
-                      // No previous error (e.g. selecting disk, track or sector)
+                      // No previous error (e.g. fs issue)
                       {
                         tempByte = (ioByteCnt-4) % 32;        // [0..31]
                         if (!tempByte)
@@ -841,6 +843,15 @@ void loop(){
                     break;  
                   }
                   ioByteCnt++; 
+                  // clean up after loader if done.
+                  if  ((ioByteCnt > (biosSize+4)) && ( loaderReg = 255) ) { 
+                    // we are done loading the data and must reset or the computer will hang.
+                    loaderReg = 0; // re-lock the loader
+                    lastOp = 255;  // reset last op (this value makes certain a new operation is initiated.)
+                    busIO();       // send the cpu back to run mode
+                    bitSet(DDRB, RES_);
+                    bitClear(DDRB, RES_); // reset
+                  }
                   
                 } 
                 break;
@@ -866,18 +877,6 @@ void loop(){
      
 
 } // end - on to next loop
-
-
-// Function to calculate checksum
-uint8_t calculateChecksum(uint16_t start, uint16_t size, const char* name) {
-    uint8_t checksum = 0;
-    checksum ^= (start & 0xFF) ^ (start >> 8); // Add bytes of start
-    checksum ^= (size & 0xFF) ^ (size >> 8);   // Add bytes of size
-    for (int i = 0; i < 11; i++) {             // Add bytes of name
-        checksum ^= name[i];
-    }
-    return checksum;
-}
 
 // tri-state the bus
 void busTstate(void) {
@@ -964,6 +963,46 @@ uint8_t RAMRead(uint16_t addr) {
     busTstate();
     return(ioData); 
 }
+
+void updateEEPROM(uint16_t newStart, uint16_t newSize, const char* newName) {
+    // Update BIOS parameters in EEPROM
+    EEPROM.put(BIOS_START_ADDR, newStart);
+    EEPROM.put(BIOS_SIZE_ADDR, newSize);
+    for (int i = 0; i < sizeof(biosName); i++) {
+        EEPROM.write(BIOS_NAME_ADDR + i, newName[i]);
+    }
+
+    // Update checksum
+    uint8_t newChecksum = calculateChecksum(newStart, newSize, newName);
+    EEPROM.write(CHECKSUM_ADDR, newChecksum);
+}
+
+
+// Function to calculate checksum
+/*uint8_t calculateChecksum(uint16_t start, uint16_t size, const char* name) {
+    uint8_t checksum = 0;
+    checksum ^= (start & 0xFF) ^ (start >> 8); // Add bytes of start
+    checksum ^= (size & 0xFF) ^ (size >> 8);   // Add bytes of size
+    for (int i = 0; i < 11; i++) {             // Add bytes of name
+        checksum ^= name[i];
+    }
+    return checksum;
+}*/
+
+uint8_t calculateChecksum(uint16_t start, uint16_t size, const char* name) {
+    uint8_t checksum = 0;
+    checksum ^= (start & 0xFF) ^ (start >> 8); // Add bytes of start
+    checksum ^= (size & 0xFF) ^ (size >> 8);   // Add bytes of size
+    for (int i = 0; i < 11; i++) {             // Add bytes of name
+        checksum ^= name[i];
+    }
+    
+    // Take one's complement of the checksum
+    checksum = ~checksum;
+    
+    return checksum;
+}
+
 
 // IOS SD Card routines for Z80-MBC2 floppy emulation See *** Attribution at top ***
 // ------------------------------------------------------------------------------
