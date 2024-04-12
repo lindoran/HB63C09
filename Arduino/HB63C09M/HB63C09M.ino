@@ -99,10 +99,20 @@ const uint8_t NIBBLE_MASK  = 252; // Shifted nibble mask as it appears on the C 
 // Pulls the I/O address off PORTC as a 6-bit nibble
 #define A_NIBBLE ((uint8_t)((PINC & NIBBLE_MASK) >> 2))
 
+// Define default bootstrap values
+const uint16_t DEFAULT_BIOS_START = 0xC000;
+const uint16_t DEFAULT_BIOS_SIZE = 0x4000;
+const char DEFAULT_BIOS_NAME[] = "BIOS.BIN";
 
-//Write accsess time - best to not mess with this
+// Define EEPROM addresses for each variable
+const int BIOS_START_ADDR = 0;
+const int BIOS_SIZE_ADDR = sizeof(uint16_t);                  // normally 2
+const int BIOS_NAME_ADDR = BIOS_SIZE_ADDR + sizeof(uint16_t); // normally 4
+const int CHECKSUM_ADDR = BIOS_NAME_ADDR + 11; // Assuming 11 bytes for biosName and 1 byte for '\0'
+
+//RAM Write accsess time - best to not mess with this
 //at 20Mhz a single bit flip is 50ns at 16 it is a bit closer to 60, by introducing this short delay
-//we asure the ram chip has time to respond (accsess time of our RAM is 55ns) regardless of clock
+//we asure the ram chip has time to respond (min accsess time of our RAM is 55ns) regardless of clock
 //speed.
 #define DO_TWICE_NOP() \
 do { \
@@ -138,9 +148,11 @@ uint8_t  errCodeSD;                   // Temporary variable to store error codes
 uint8_t  numReadBytes;                // Number of read bytes after a readSD() call
 uint8_t  loaderReg = 0;               // loader register.
 uint16_t loaderAddr= 0;               // this is the loader current address.
-uint16_t biosStart = 0xC000;          // start of the system rom in memory (this will eventually be stored in EEPROM)
-uint16_t biosSize  = 0x4000;          // this is the size to load to memory before reset. (this will eventually be stored in EEPROM)
-char     biosName[11]  = "BIOS.BIN";      // this is the filename in the root of the sd card to load.
+uint16_t biosStart;                   // start of the system rom in memory (this will eventually be stored in EEPROM)
+uint16_t biosSize;                    // this is the size to load to memory before reset. (this will eventually be stored in EEPROM)
+char     biosName[11];                // this is the filename in the root of the sd card to load.
+uint8_t  storedChecksum;              // variables for verifying EEPROM Contents
+uint8_t  calculatedChecksum;          //  ''
 
 const char *  fileNameSD;             // Pointer to the string with the currently used file name
 
@@ -159,9 +171,6 @@ const byte    maxDiskNum   = 99;          // Max number of virtual disks
 
 
 void setup() {
-Serial.begin(115200);
-
-
 busTstate();               // This tri-states the MCU bus -- it is pulled low by external pulldowns 
 
 //outputs
@@ -174,7 +183,7 @@ bitSet(DDRD, BCLK); // set up the bank clock pin to output
 // 63C09 System is in tri-state
 
 bankReg = 0;        // bank register is reset along with the 63C09 by the avr we need to update the stored value
-
+Serial.begin(115200);  // set up uart
 
 // **TODO** Figure out how to tell if this is a reset from the switch so this can be eliminated when user presses
 _delay_ms(300);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
@@ -205,6 +214,57 @@ if (RAMRead(0xFFFF) == 42) {
   // mount the SD Card to initiaize HB63C09 - IOS Floppy emulation 
   // see Attribuition at top
   Serial.println();  
+  Serial.println("ATMEGA32 EEPROM Details:");
+  // Read from EEPROM
+  EEPROM.get(BIOS_START_ADDR, biosStart);
+  EEPROM.get(BIOS_SIZE_ADDR, biosSize);
+  for (int i = 0; i < sizeof(biosName); i++) {
+     biosName[i] = EEPROM.read(BIOS_NAME_ADDR + i);
+  }
+  EEPROM.get(CHECKSUM_ADDR, storedChecksum);
+
+  // Calculate checksum
+  calculatedChecksum = calculateChecksum(biosStart, biosSize, biosName);
+
+  if (storedChecksum == calculatedChecksum) {
+    // Define variables and their labels
+    uint16_t* addresses[] = {&biosStart, &biosSize};
+    String labels[] = {"BIOS Start: ", "BIOS Size : ", "BIOS Name : "};
+
+    // Print each variable with its label
+    for (int i = 0; i < sizeof(labels) / sizeof(labels[0]); i++) {
+        Serial.print(" ");
+        Serial.print(labels[i]); // Print the header label
+        if (i == sizeof(labels) / sizeof(labels[0]) - 1) { // If it's the last variable (Name)
+            Serial.println(biosName); // Print the BIOS name directly
+        } else {
+            Serial.print("0x");
+            Serial.println(*(addresses[i]), HEX); // Print the address/size in hexadecimal
+        }
+    }
+
+    Serial.println(); // End the line
+
+  } else {
+      // Data is invalid or EEPROM is not initialized, update with default values
+      Serial.println("Data in EEPROM is invalid or uninitialized. Updating with default values.");
+
+      // Update with default values
+      biosStart = DEFAULT_BIOS_START;
+      biosSize = DEFAULT_BIOS_SIZE;
+      strcpy(biosName, DEFAULT_BIOS_NAME);
+
+      // Calculate checksum for default values
+      calculatedChecksum = calculateChecksum(biosStart, biosSize, biosName);
+
+      // Write default values and checksum to EEPROM
+      EEPROM.put(BIOS_START_ADDR, biosStart);
+      EEPROM.put(BIOS_SIZE_ADDR, biosSize);
+      for (int i = 0; i < sizeof(biosName); i++) {
+        EEPROM.write(BIOS_NAME_ADDR + i, biosName[i]);
+      }
+      EEPROM.write(CHECKSUM_ADDR, calculatedChecksum);
+  }
 
   Serial.print("IOS: Attempting to mount SD Card");
   if (mountSD(&filesysSD))
@@ -255,7 +315,7 @@ bitClear(DDRB, R_W);
 bitClear(DDRD, XSIN_);
 
 
-Serial.println("63C09 is now on the bus");
+Serial.println("HC63C09 is now on the bus");
 
 // flush the RX buffer to clear spurius inputs due to dongle power up
 // this avoids issues displaying the incomming prompt text.
@@ -806,6 +866,18 @@ void loop(){
      
 
 } // end - on to next loop
+
+
+// Function to calculate checksum
+uint8_t calculateChecksum(uint16_t start, uint16_t size, const char* name) {
+    uint8_t checksum = 0;
+    checksum ^= (start & 0xFF) ^ (start >> 8); // Add bytes of start
+    checksum ^= (size & 0xFF) ^ (size >> 8);   // Add bytes of size
+    for (int i = 0; i < 11; i++) {             // Add bytes of name
+        checksum ^= name[i];
+    }
+    return checksum;
+}
 
 // tri-state the bus
 void busTstate(void) {
