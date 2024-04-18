@@ -50,6 +50,7 @@ to develop this system see their website at http://pcbway.com
 #include <EEPROM.h>
 #include "PetitFS.h"
 #include "blockcopy.h"
+#include "vcmos.h"
 
 // AVR DATABUS - NOT USED - JUST FOR REFRENCE - 
 const uint8_t D0      = 0; // PA0 (pin 40)
@@ -108,7 +109,7 @@ const char DEFAULT_BIOS_NAME[] = "BIOS.BIN";
 const int BIOS_START_ADDR = 0;
 const int BIOS_SIZE_ADDR = sizeof(uint16_t);                  // normally 2
 const int BIOS_NAME_ADDR = BIOS_SIZE_ADDR + sizeof(uint16_t); // normally 4
-const int CHECKSUM_ADDR = BIOS_NAME_ADDR + 11;                // Assuming 11 bytes for biosName and 1 byte for '\0'
+const int CHECKSUM_ADDR = BIOS_NAME_ADDR + MAX_FN_LENGTH;     // Assuming 11 bytes for biosName and 1 byte for '\0'
 
 //RAM Write accsess time - best to not mess with this
 //at 20Mhz a single bit flip is 50ns at 16 it is a bit closer to 60, by introducing this short delay
@@ -132,6 +133,12 @@ enum PinMode {
 void ddr_a_nibble(enum PinMode mode); // forward def, see code below main block. ex: ddr_a_nibble(READ_MODE);
 void write_a_nibble(uint16_t data);   // forward def, see code block below ex: write_a_nibble(0xFFFE); 
 
+// ASCII ESC for vCMOS
+#define ESC_KEY 27
+
+// MAX COMMAND LENGTH FOR 
+#define MAX_COMMAND_LENGTH 100
+
 // File name Defines for IOS
 
 #define   M6X09DISK     "DSxNyy.DSK"  // Generic 6x09 disk name (from DS0N00.DSK to DS9N99.DSK)
@@ -150,7 +157,7 @@ uint8_t  loaderReg = 0;               // loader register.
 uint16_t loaderAddr= 0;               // this is the loader current address.
 uint16_t biosStart;                   // start of the system rom in memory (this will eventually be stored in EEPROM)
 uint16_t biosSize;                    // this is the size to load to memory before reset. (this will eventually be stored in EEPROM)
-char     biosName[11];                // this is the filename in the root of the sd card to load.
+char     biosName[MAX_FN_LENGTH];                // this is the filename in the root of the sd card to load.
 uint8_t  storedChecksum;              // variables for verifying EEPROM Contents
 uint8_t  calculatedChecksum;          //  ''
 
@@ -158,7 +165,7 @@ const char *  fileNameSD;             // Pointer to the string with the currentl
 
 FATFS    filesysSD;                   // Filesystem object (PetitFS library)
 uint8_t  bufferSD[32];                // I/O buffer for SD disk operations (store a "segment" of a SD sector).
-uint8_t  diskName[11] = M6X09DISK;    // String used for virtual disk file name
+uint8_t  diskName[MAX_FN_LENGTH] = M6X09DISK;    // String used for virtual disk file name
 uint16_t trackSel;                    // Store the current track number [0..511]
 uint8_t  sectSel;                     // Store the current sector number [0..31]
 uint8_t  diskErr = 19;                // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
@@ -185,15 +192,13 @@ bitSet(DDRD, BCLK); // set up the bank clock pin to output
 bankReg = 0;        // bank register is reset along with the 63C09 by the avr we need to update the stored value
 Serial.begin(115200);  // set up uart
 
-// **TODO** Figure out how to tell if this is a reset from the switch so this can be eliminated when user presses
-_delay_ms(300);          // Delay is needed for some USB dongles to properly initilize after being pluged in.
-
 // Stageing state
 bitSet(DDRD, XSIN_);   // inhibit the bus tranceiver (tri-state bioreq_)
 bitSet(DDRD, IOREQ_);   // set tranceiver to enable output, bioreq_ = 0
 bitSet(DDRB, R_W);     // set R_W LINE pin to an output
 ddr_a_nibble(WRITE_MODE);  // set the nibble writer to write mode.
 
+while(!Serial); // waiting for USB Serial to load.
 // check for configuration 
 RAMWrite(42,0xFFFF);    //write the meaning of life.
 // its ram?
@@ -264,6 +269,26 @@ if (RAMRead(0xFFFF) == 42) {
     }
 
     Serial.println(); // End the line
+    Serial.println("press <ESC> for vCMOS");
+    if (waitForEscape(3000)) {
+      Serial.println("Welcome to vCMOS! (HB63C09M Minimal Loading Environment");
+      Serial.println("You can do:SET,SHOW, QUIT and COMMIT");
+      Serial.print("> ");
+      while(true) {
+        if(Serial.available()) {
+          if(processCommand(readSerialLine())) {
+            Serial.println();
+            break;
+          } else {
+            Serial.print("> ");
+          }
+        } else { 
+            delay(10);  // prevent wait blocking 
+        }
+  
+      }
+    }   
+
 
   } else {
       // Data is invalid or EEPROM is not initialized, update with default values
@@ -968,7 +993,7 @@ void updateEEPROM(uint16_t newStart, uint16_t newSize, const char* newName) {
     // Update BIOS parameters in EEPROM
     EEPROM.put(BIOS_START_ADDR, newStart);
     EEPROM.put(BIOS_SIZE_ADDR, newSize);
-    for (int i = 0; i < sizeof(biosName); i++) {
+    for (int i = 0; i < sizeof(newName); i++) {
         EEPROM.write(BIOS_NAME_ADDR + i, newName[i]);
     }
 
@@ -978,16 +1003,18 @@ void updateEEPROM(uint16_t newStart, uint16_t newSize, const char* newName) {
 }
 
 
-// Function to calculate checksum
-/*uint8_t calculateChecksum(uint16_t start, uint16_t size, const char* name) {
-    uint8_t checksum = 0;
-    checksum ^= (start & 0xFF) ^ (start >> 8); // Add bytes of start
-    checksum ^= (size & 0xFF) ^ (size >> 8);   // Add bytes of size
-    for (int i = 0; i < 11; i++) {             // Add bytes of name
-        checksum ^= name[i];
+bool waitForEscape(int timeoutMillis) {
+    unsigned long startTime = millis();
+    while (millis() - startTime < timeoutMillis) {
+        if (Serial.available() > 0) {
+            int incomingByte = Serial.read();
+            if (incomingByte == ESC_KEY) {
+                return true; // Escape key pressed
+            }
+        }
     }
-    return checksum;
-}*/
+    return false; // Timeout reached, escape key not pressed
+}
 
 uint8_t calculateChecksum(uint16_t start, uint16_t size, const char* name) {
     uint8_t checksum = 0;
