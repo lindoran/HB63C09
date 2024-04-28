@@ -44,7 +44,7 @@ to develop this system see their website at http://pcbway.com
 
 */
 
-
+#include "const.h"
 #include <stdint.h>
 #include <Wire.h>
 #include <EEPROM.h>
@@ -52,64 +52,6 @@ to develop this system see their website at http://pcbway.com
 #include "blockcopy.h"
 #include "vcmos.h"
 
-// AVR DATABUS - NOT USED - JUST FOR REFRENCE - 
-const uint8_t D0      = 0; // PA0 (pin 40)
-const uint8_t D1      = 1; // PA1 (pin 39)
-const uint8_t D2      = 2; // PA2 (pin 38)
-const uint8_t D3      = 3; // PA3 (pin 37)
-const uint8_t D4      = 4; // PA4 (pin 36)
-const uint8_t D5      = 5; // PA5 (pin 35)
-const uint8_t D6      = 6; // PA6 (pin 34)
-const uint8_t D7      = 7; // PA7 (pin 33)
-
-// PORT B 
-const uint8_t RES_    = 0; // PB0 (pin 1) - 6309 ~reset line
-const uint8_t HALT_   = 1; // PB1 (pin 2) - 6309 ~Halt line
-const uint8_t R_W     = 2; // PB2 (pin 3) - 6309 read/~write line
-const uint8_t IRQ_    = 3; // PB3 (pin 4) - 6309 ~irq
-const uint8_t SPISS_  = 4; // PB4 (pin 5) - sd SPI
-const uint8_t SPIMOSI = 5; // PB5 (pin 6) - sd SPI
-const uint8_t SPIMISO = 6; // PB6 (pin 7) - sd SPI
-const uint8_t SPISCK  = 7; // PB7 (pin 8) - sd SPI
-
-// PORT C
-const uint8_t SCL_PC0 = 0; // PC0 (pin 22) - i2c signals
-const uint8_t SDA_PC1 = 1; // PC1 (pin 23) - i2c signals
-const uint8_t MCUA0   = 2; // PC2 (pin 24) - 6309 A0
-const uint8_t MCUA1   = 3; // PC3 (pin 25) - 6309 A1
-const uint8_t MCUA2   = 4; // PC4 (pin 26) - 6309 A2
-const uint8_t MCUA3   = 5; // PC5 (pin 27) - 6309 A3
-const uint8_t MCUA4   = 6; // PC6 (pin 28) - 6309 A4
-const uint8_t MCUA5   = 7; // PC7 (pin 29) - 6309 A5
-
-// PORT D
-const uint8_t RX      = 0; // PD0 (pin 14) - RX PIN
-const uint8_t TX      = 1; // PD1 (pin 15) - TX PIN
-const uint8_t WR_     = 2; // PD2 (pin 16) - RAM WR_ strobe
-const uint8_t RD_     = 3; // PD3 (pin 17) - RAM RD_ strobe
-const uint8_t BCLK    = 4; // PD4 (pin 18) - bank address clock pin
-const uint8_t XSIN_   = 5; // PD5 (pin 19) - bus transceiver inhibit bar line
-const uint8_t IOREQ_  = 6; // PD6 (pin 20) - io request bar line
-const uint8_t IOGNT_  = 7; // PD7 (pin 21) - io grant bar line
-
-// IO control addressing
-const uint8_t NIBBLE_BITS  =   6; // Number of bits in the nibble
-const uint8_t ADDRESS_MASK =  63; // Un-shifted nibble mask as it appears in the curOp variable
-const uint8_t NIBBLE_MASK  = 252; // Shifted nibble mask as it appears on the C port
-
-// Pulls the I/O address off PORTC as a 6-bit nibble
-#define A_NIBBLE ((uint8_t)((PINC & NIBBLE_MASK) >> 2))
-
-// Define default bootstrap values
-const uint16_t DEFAULT_BIOS_START = 0xC000;
-const uint16_t DEFAULT_BIOS_SIZE = 0x4000;
-const char DEFAULT_BIOS_NAME[] = "BIOS.BIN";
-
-// Define EEPROM addresses for each variable
-const int BIOS_START_ADDR = 0;
-const int BIOS_SIZE_ADDR = sizeof(uint16_t);                  // normally 2
-const int BIOS_NAME_ADDR = BIOS_SIZE_ADDR + sizeof(uint16_t); // normally 4
-const int CHECKSUM_ADDR = BIOS_NAME_ADDR + MAX_FN_LENGTH;     // Assuming 11 bytes for biosName and 1 byte for '\0'
 
 //RAM Write accsess time - best to not mess with this
 //at 20Mhz a single bit flip is 50ns at 16 it is a bit closer to 60, by introducing this short delay
@@ -133,17 +75,12 @@ enum PinMode {
 void ddr_a_nibble(enum PinMode mode); // forward def, see code below main block. ex: ddr_a_nibble(READ_MODE);
 void write_a_nibble(uint16_t data);   // forward def, see code block below ex: write_a_nibble(0xFFFE); 
 
-// ASCII ESC for vCMOS
-#define ESC_KEY 27
-
-// MAX COMMAND LENGTH FOR 
-#define MAX_COMMAND_LENGTH 100
 
 // File name Defines for IOS
 
 #define   M6X09DISK     "DSxNyy.DSK"  // Generic 6x09 disk name (from DS0N00.DSK to DS9N99.DSK)
 
-// Global System variables
+// Global System variables  -- see const.h for readabiblity constants
 
 uint8_t  busData = 0;                 // data for current step through the loop
 uint8_t  bankReg = 0;                 // last value set in bank register
@@ -203,15 +140,15 @@ while(!Serial); // waiting for USB Serial to load.
 RAMWrite(42,0xFFFF);    //write the meaning of life.
 // its ram?
 if (RAMRead(0xFFFF) == 42) {
-  Serial.println("Staging From RAM...");
-  Serial.println("Bootstrap Code loading at 0xFFC0..." );  
+  Serial.println(F("Staging From RAM..."));
+  Serial.println(F("Bootstrap Code loading at 0xFFC0...") );  
   loaderAddr = blockcopy_blks[0].start;
 
   for (unsigned int j = 0; j < blockcopy_blks[0].len; ++j) {
     RAMWrite(blockcopy_blks[0].data[j],loaderAddr);
     loaderAddr++;
   }
-  Serial.println("Setting Reset Vector...");
+  Serial.println(F("Setting Reset Vector..."));
   // set the reset vector to the begining of the loader
   RAMWrite(0xFF, 0xFFFE);
   RAMWrite(0xC0, 0xFFFF);  
@@ -234,53 +171,42 @@ if (RAMRead(0xFFFF) == 42) {
        errCodeSD = mountSD(&filesysSD);
      }
      while (errCodeSD);
-     Serial.println("IOS: SD Card found!") ;
+     Serial.println(F("IOS: SD Card found!")) ;
    }
-  else Serial.println("...OK!");
+  else Serial.println(F("...OK!"));
   // Check EEPROM CONTENTS
   Serial.println();  
-  Serial.println("ATMEGA32 EEPROM Details:");
+  Serial.println(F("Current vCMOS settings:"));
   // Read from EEPROM
   EEPROM.get(BIOS_START_ADDR, biosStart);
   EEPROM.get(BIOS_SIZE_ADDR, biosSize);
   for (int i = 0; i < sizeof(biosName); i++) {
      biosName[i] = EEPROM.read(BIOS_NAME_ADDR + i);
   }
+  biosName[sizeof(biosName) - 1] = '\0';  // ensure null termination 
   EEPROM.get(CHECKSUM_ADDR, storedChecksum);
 
   // Calculate checksum
   calculatedChecksum = calculateChecksum(biosStart, biosSize, biosName);
 
   if (storedChecksum == calculatedChecksum) {
-    // Define variables and their labels
-    uint16_t* addresses[] = {&biosStart, &biosSize};
-    String labels[] = {"BIOS Start: ", "BIOS Size : ", "BIOS Name : "};
-
+    
     // Print each variable with its label
-    for (int i = 0; i < sizeof(labels) / sizeof(labels[0]); i++) {
-        Serial.print(" ");
-        Serial.print(labels[i]); // Print the header label
-        if (i == sizeof(labels) / sizeof(labels[0]) - 1) { // If it's the last variable (Name)
-            Serial.println(biosName); // Print the BIOS name directly
-        } else {
-            Serial.print("0x");
-            Serial.println(*(addresses[i]), HEX); // Print the address/size in hexadecimal
-        }
-    }
+    showVariables(); // show current EEPROM Settings
 
-    Serial.println(); // End the line
-    Serial.println("press <ESC> for vCMOS");
+    Serial.println(F("press <ESC> for vCMOS"));
     if (waitForEscape(3000)) {
-      Serial.println("Welcome to vCMOS! (HB63C09M Minimal Loading Environment");
-      Serial.println("You can do:SET,SHOW, QUIT and COMMIT");
-      Serial.print("> ");
+      Serial.println(F("Welcome to vCMOS! "));
+      Serial.println(F("(C) D. Collins 2023"));
+      Serial.println(F("Type '?' for Commands "));
+      Serial.print(F("> "));
       while(true) {
         if(Serial.available()) {
           if(processCommand(readSerialLine())) {
             Serial.println();
             break;
           } else {
-            Serial.print("> ");
+            Serial.print(F("> "));
           }
         } else { 
             delay(10);  // prevent wait blocking 
@@ -292,23 +218,10 @@ if (RAMRead(0xFFFF) == 42) {
 
   } else {
       // Data is invalid or EEPROM is not initialized, update with default values
-      Serial.println("Data in EEPROM is invalid or uninitialized. Updating with default values.");
-
+      Serial.println(F("Data in EEPROM is invalid or uninitialized. Updating with default values."));
       // Update with default values
-      biosStart = DEFAULT_BIOS_START;
-      biosSize = DEFAULT_BIOS_SIZE;
-      strcpy(biosName, DEFAULT_BIOS_NAME);
-
-      // Calculate checksum for default values
-      calculatedChecksum = calculateChecksum(biosStart, biosSize, biosName);
-
-      // Write default values and checksum to EEPROM
-      EEPROM.put(BIOS_START_ADDR, biosStart);
-      EEPROM.put(BIOS_SIZE_ADDR, biosSize);
-      for (int i = 0; i < sizeof(biosName); i++) {
-        EEPROM.write(BIOS_NAME_ADDR + i, biosName[i]);
-      }
-      EEPROM.write(CHECKSUM_ADDR, calculatedChecksum);
+      updateEEPROM(DEFAULT_BIOS_START, DEFAULT_BIOS_SIZE, DEFAULT_BIOS_NAME);
+     
   }
   
   
@@ -316,23 +229,23 @@ if (RAMRead(0xFFFF) == 42) {
   diskErr = openSD(biosName);       // open the bios volume
   if (diskErr) {
     printErrSD(1,diskErr,biosName); // print error message
-    Serial.println(" ... Halt!");
+    Serial.println(F(" ... Halt!"));
     while(1);  // halt.
   }
   // seek to 0 just in case 
   diskErr = seekSD(0);
    if (diskErr) {
     printErrSD(4,diskErr,biosName); // print error message
-    Serial.println(" ... Halt!");
+    Serial.println(F(" ... Halt!"));
     while(1);  // halt.
   }
 } else {  // its ROM...
-  Serial.println("\nStaging from ROM...");
+  Serial.println(F("\nStaging from ROM..."));
 
 }
 
 Serial.println();
-Serial.println("Switching Bus Mastering to HC63C09...");
+Serial.println(F("Switching Bus Mastering to HC63C09..."));
 // run state 
 write_a_nibble(0);      
 ddr_a_nibble(READ_MODE); // address bus should be tri-stated
@@ -342,7 +255,7 @@ bitClear(DDRB, R_W);
 bitClear(DDRD, XSIN_);
 
 
-Serial.println("HC63C09 is now on the bus...");
+Serial.println(F("HC63C09 is now on the bus..."));
 
 // flush the RX buffer to clear spurius inputs due to dongle power up
 // this avoids issues displaying the incomming prompt text.
@@ -642,7 +555,7 @@ void loop(){
                   if (loaderReg == 0xFF) {
                     busIO();
                     bitSet(DDRB, HALT_);
-                    Serial.println("\n System Halted.");
+                    Serial.println(F("\n System Halted."));
                     while(0);  // infinate loop.
                   } 
                   else {
@@ -993,13 +906,17 @@ void updateEEPROM(uint16_t newStart, uint16_t newSize, const char* newName) {
     // Update BIOS parameters in EEPROM
     EEPROM.put(BIOS_START_ADDR, newStart);
     EEPROM.put(BIOS_SIZE_ADDR, newSize);
-    for (int i = 0; i < sizeof(newName); i++) {
+    for (int i = 0; i < MAX_FN_LENGTH; i++) {
+        EEPROM.write(BIOS_NAME_ADDR + i, 0);
+    }
+    for (int i = 0; i < strlen(newName); i++) {
         EEPROM.write(BIOS_NAME_ADDR + i, newName[i]);
     }
-
+    
     // Update checksum
     uint8_t newChecksum = calculateChecksum(newStart, newSize, newName);
     EEPROM.write(CHECKSUM_ADDR, newChecksum);
+ 
 }
 
 
