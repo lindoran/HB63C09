@@ -52,8 +52,10 @@ const uint8_t NIBBLE_MASK  = 252; // Shifted nibble mask as it appears on the C 
 // Pulls the I/O address off PORTC as a 6-bit nibble
 #define A_NIBBLE ((uint8_t)((PINC & NIBBLE_MASK) >> 2))
 
-// MAX CHARACTERS IN A FILENAME WITH NULL
-#define MAX_FN_LENGTH 12
+// MAX CHARACTERS IN A FILENAME WITH NULL  (petitFS uses this legnth)
+#define MAX_FN_LENGTH 13  
+
+
 
 // Define default bootstrap values
 const uint16_t DEFAULT_BIOS_START = 0xC000;

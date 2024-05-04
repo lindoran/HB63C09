@@ -1,12 +1,36 @@
 // Virtual CMOS Settings Management for the HB63C09M
 
 // see LICENCE for details
+
+// this is a minimal staging envorment for the HB63C09M. This uses sd direct access vs iOS floppy emulation
+// its a WYSIWYG command interpereter, pressing ? <enter> shows avalible commands.
+ 
+//PetitFS licence:
+/*
+/-----------------------------------------------------------------------------/
+/  Petit FatFs - FAT file system module  R0.03                  (C)ChaN, 2014
+/-----------------------------------------------------------------------------/
+/ Petit FatFs module is a generic FAT file system module for small embedded
+/ systems. This is a free software that opened for education, research and
+/ commercial developments under license policy of following trems.
+/
+/  Copyright (C) 2014, ChaN, all right reserved.
+/
+/ * The Petit FatFs module is a free software and there is NO WARRANTY.
+/ * No restriction on use. You can use, modify and redistribute it for
+/   personal, non-profit or commercial products UNDER YOUR RESPONSIBILITY.
+/ * Redistributions of source code must retain the above copyright notice.
+/
+/-----------------------------------------------------------------------------/
+*/
+
+
 // vcmos.cpp
 
 #include <Arduino.h>
 #include <stdint.h>
 #include <string.h>
-#include "vcmos.h"
+#include "vbios.h"
 #include "PetitFS.h"
 #include "const.h" 
 
@@ -25,63 +49,51 @@ Variable variables[NUM_VARIABLES] = {
     {"FILE", &biosName, "%s"}
 };
 
-FRESULT scan_files(char *path)
-{
-    FRESULT res;
-    FILINFO fno;
-    DIR dir;
-    int filesPrintedOnLine = 0;
 
-    res = pf_opendir(&dir, path);
-    if (res == FR_OK)
-    {
-        while (true)
-        {
-            res = pf_readdir(&dir, &fno);
-            if (res != FR_OK || fno.fname[0] == 0) {
-                Serial.println();
+FRESULT scan_files(char *path) {  
+    errCodeSD = pf_opendir(&dir, path);
+    if (errCodeSD == FR_OK) {
+        while (true) {
+            errCodeSD = pf_readdir(&dir, &fno);
+            if (errCodeSD != FR_OK || fno.fname[0] == 0) {
+                
                 break;
-            }
-            if (fno.fattrib & AM_HID)
-                continue;
-
-            // Print directory name with []
-            if (fno.fattrib & AM_DIR)
-            {
-                Serial.print("[");
-                Serial.printf("%s]",fno.fname);
-                // Pad with spaces if necessary
-                for (int i = strlen(fno.fname); i < MAX_FN_LENGTH-1; i++)
-                {
-                    Serial.print(" ");
-                }
-            }
-            else // Print file name
-            {
+            
+            } else { // Print file name, printf formating is broken maybe? this works
                 Serial.print(fno.fname);
-                // Pad with spaces if necessary
-                for (int i = strlen(fno.fname); i < MAX_FN_LENGTH; i++)
-                {
-                    Serial.print(" ");
+                for (int a = 0; a < MAX_FN_LENGTH - strlen(fno.fname) - 1 ; a++) {
+                  Serial.write(' ');
                 }
-            }
+              
+                Serial.printf("  %s  ", (fno.fattrib & AM_DIR) ? "<DIR>" : "     ");
 
-            // Move to the next line if required
-            filesPrintedOnLine++;
-            if (filesPrintedOnLine >= MAX_FILES_PER_LINE)
-            {
-                Serial.println();
-                filesPrintedOnLine = 0;
+                // Print size and label if not directory
+                if (!(fno.fattrib & AM_DIR)) {
+                  Serial.printf("%10lu", fno.fsize); 
+                  
+                } else {
+                  for (int a = 0; a < 10 ; a++) {
+                    Serial.write(' ');
+                  }
+                }
+                 Serial.printf("  %02u/%02u/%04u  %02u:%02u:%02u",
+                              ((fno.fdate >> 5) & 0xF), (fno.fdate & 0x1F),
+                              ((fno.fdate >> 9) + 1980),
+                              (fno.ftime >> 11), ((fno.ftime >> 5) & 0x3F),
+                              ((fno.ftime & 0x1F) * 2));
+                
             }
-            else // Print space between file names
-            {
-                Serial.print(" ");
-            }
+      
+            // Print a newline after each file
+            Serial.println();
         }
-    }
+   }
 
-    return res;
+    return errCodeSD;
 }
+
+
+
 
 // test for a valid hex digit otherwise return false
 bool isHex(const String& str) {
@@ -114,11 +126,13 @@ void setVariable(int index, const char* value) {
             value += 2;
         }
         
-        if (!isHex(value)) {
+        if (!isHex(value)) {  // not a number?
             Serial.println(F("Value is not numeric!"));
             return;
         }
-        
+
+
+        // command processor corrects for capitals, convert to uint16_t
         for (int i = 0; value[i] != '\0'; ++i) {   
             if (value[i] >= '0' && value[i] <= '9') {
                 hexValue = hexValue * 16 + (value[i] - '0');
@@ -190,8 +204,7 @@ uint8_t processCommand(const String& command) {
     char cmd[10];
     char variable[20];
     char value[MAX_FN_LENGTH];
-    uint8_t err; 
-    
+
     if (command.length() == 0) {
       // empty command do nothing 
       return 0;
@@ -215,15 +228,16 @@ uint8_t processCommand(const String& command) {
         }
 
     // DIR
-    }  else if (strcmp(cmd, "DIR") == 0) {
-        err = scan_files("");
-        if (err) { 
-          printErrSD(2,err,NULL);
+    } else if (strcmp(cmd, "DIR") == 0) {
+        errCodeSD = scan_files("");
+        if (errCodeSD) { 
+          printErrSD(2,errCodeSD,NULL);
           
         }
         
+   
     // SHOW
-    }  else if (strcmp(cmd, "SHOW") == 0) {
+    } else if (strcmp(cmd, "SHOW") == 0) {
         showVariables();
     
     // COMMIT    
@@ -252,6 +266,8 @@ uint8_t processCommand(const String& command) {
         Serial.println(F("SHOW     - Display all variables"));
         Serial.println();
         Serial.println(F("To display this dialog, type '?' and press <ENTER>"));
+    
+        
     } else {
         Serial.println(F("Unknown command"));
         

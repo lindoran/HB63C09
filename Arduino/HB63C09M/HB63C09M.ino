@@ -50,7 +50,7 @@ to develop this system see their website at http://pcbway.com
 #include <EEPROM.h>
 #include "PetitFS.h"
 #include "blockcopy.h"
-#include "vcmos.h"
+#include "vbios.h"
 
 
 //RAM Write accsess time - best to not mess with this
@@ -88,21 +88,24 @@ uint8_t  lastOp = 0;                  // last operation run (MSB = read / write 
 uint8_t  curOp = 0;                   // curent operation run (MSB = read /write bit, remaining bits are addres)
 uint16_t ioByteCnt;                   // Exchanged bytes counter durring an I/O operation
 uint8_t  tempByte;                    // temorary byte storage
-uint8_t  errCodeSD;                   // Temporary variable to store error codes from the PetitFS
+FRESULT  errCodeSD;                   // Temporary variable to store error codes from the PetitFS
+FILINFO  fno;                         // current derectory file info 
+DIR      dir;                         // current directory 
 uint8_t  numReadBytes;                // Number of read bytes after a readSD() call
 uint8_t  loaderReg = 0;               // loader register.
 uint16_t loaderAddr= 0;               // this is the loader current address.
 uint16_t biosStart;                   // start of the system rom in memory (this will eventually be stored in EEPROM)
 uint16_t biosSize;                    // this is the size to load to memory before reset. (this will eventually be stored in EEPROM)
-char     biosName[MAX_FN_LENGTH];                // this is the filename in the root of the sd card to load.
+char     biosName[MAX_FN_LENGTH];     // this is the filename in the root of the sd card to load.
 uint8_t  storedChecksum;              // variables for verifying EEPROM Contents
 uint8_t  calculatedChecksum;          //  ''
+
 
 const char *  fileNameSD;             // Pointer to the string with the currently used file name
 
 FATFS    filesysSD;                   // Filesystem object (PetitFS library)
 uint8_t  bufferSD[32];                // I/O buffer for SD disk operations (store a "segment" of a SD sector).
-uint8_t  diskName[MAX_FN_LENGTH] = M6X09DISK;    // String used for virtual disk file name
+char  diskName[MAX_FN_LENGTH] = M6X09DISK;    // String used for virtual disk file name
 uint16_t trackSel;                    // Store the current track number [0..511]
 uint8_t  sectSel;                     // Store the current sector number [0..31]
 uint8_t  diskErr = 19;                // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
@@ -176,7 +179,7 @@ if (RAMRead(0xFFFF) == 42) {
   else Serial.println(F("...OK!"));
   // Check EEPROM CONTENTS
   Serial.println();  
-  Serial.println(F("Current vCMOS settings:"));
+  Serial.println(F("Current vBIOS settings:"));
   // Read from EEPROM
   EEPROM.get(BIOS_START_ADDR, biosStart);
   EEPROM.get(BIOS_SIZE_ADDR, biosSize);
@@ -194,11 +197,14 @@ if (RAMRead(0xFFFF) == 42) {
     // Print each variable with its label
     showVariables(); // show current EEPROM Settings
 
-    Serial.println(F("press <ESC> for vCMOS"));
+    Serial.println(F("press <ESC> for vBIOS"));
     if (waitForEscape(3000)) {
-      Serial.println(F("Welcome to vCMOS! "));
-      Serial.println(F("(C) D. Collins 2023"));
+      Serial.println();
+      Serial.println(F("Welcome to HB63C09M vBIOS!"));
+      Serial.println(F(" (C) 2023 - D. Collins (Z80Dad)"));
+      Serial.println();
       Serial.println(F("Type '?' for Commands "));
+      Serial.println();
       Serial.print(F("> "));
       while(true) {
         if(Serial.available()) {
