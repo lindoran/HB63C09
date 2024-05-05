@@ -21,6 +21,7 @@ extern char     biosName[MAX_FN_LENGTH];     // this is the filename in the root
 extern FRESULT  errCodeSD;                   // Temporary variable to store error codes from the PetitFS
 extern FILINFO  fno;                         // current directory file info
 extern DIR      dir;                         // current directory 
+extern DIR      lastDir;                     // temp directory storage, the last entered directory
 
 // external functions 
 extern void updateEEPROM(uint16_t newStart, uint16_t newSize, const char* newName);
@@ -31,6 +32,7 @@ extern void printErrSD(byte opType, byte errCode, const char* fileName);
 uint8_t processCommand(const String& command);
 String readSerialLine();
 void showVariables();
-FRESULT scan_files(char *path);
+FRESULT scan_files(void);
+FRESULT change_dir(const char *path);
 
 #endif /* VCMOS_H */

@@ -91,6 +91,7 @@ uint8_t  tempByte;                    // temorary byte storage
 FRESULT  errCodeSD;                   // Temporary variable to store error codes from the PetitFS
 FILINFO  fno;                         // current derectory file info 
 DIR      dir;                         // current directory 
+DIR      lastDir;                     // temp directory storage, the last entered directory 
 uint8_t  numReadBytes;                // Number of read bytes after a readSD() call
 uint8_t  loaderReg = 0;               // loader register.
 uint16_t loaderAddr= 0;               // this is the loader current address.
@@ -206,6 +207,7 @@ if (RAMRead(0xFFFF) == 42) {
       Serial.println(F("Type '?' for Commands "));
       Serial.println();
       Serial.print(F("> "));
+      change_dir(""); // set to root directory
       while(true) {
         if(Serial.available()) {
           if(processCommand(readSerialLine())) {

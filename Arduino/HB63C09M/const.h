@@ -55,6 +55,8 @@ const uint8_t NIBBLE_MASK  = 252; // Shifted nibble mask as it appears on the C 
 // MAX CHARACTERS IN A FILENAME WITH NULL  (petitFS uses this legnth)
 #define MAX_FN_LENGTH 13  
 
+// ASCII ESC for vCMOS
+#define ESC_KEY 27
 
 
 // Define default bootstrap values
@@ -68,8 +70,7 @@ const int BIOS_SIZE_ADDR = sizeof(uint16_t);                  // normally 2
 const int BIOS_NAME_ADDR = BIOS_SIZE_ADDR + sizeof(uint16_t); // normally 4
 const int CHECKSUM_ADDR = BIOS_NAME_ADDR + MAX_FN_LENGTH;     // Assuming 11 bytes for biosName and 1 byte for '\0'
 
-// ASCII ESC for vCMOS
-#define ESC_KEY 27
+
 
 
 #endif /* VCMOS_H */

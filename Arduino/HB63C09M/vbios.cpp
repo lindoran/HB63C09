@@ -34,12 +34,41 @@
 #include "PetitFS.h"
 #include "const.h" 
 
+//command processor commands
+static void cmd_help(const char*, const char*);
+static void cmd_commit(const char*, const char*);
+static void cmd_show(const char*, const char*);
+static void cmd_dir(const char*, const char*);
+static void cmd_cd(const char*, const char*);
+static void cmd_set(const char*, const char*);
+
+
+typedef void (*CommandFunc)(const char*, const char*);
+
 // Structure to represent a variable
 typedef struct {
     char name[20];
     void *ptr;
     char formatSpecifier[5];
 } Variable;
+
+// command table structure 
+typedef struct {
+  const char* name; 
+  CommandFunc function;
+} Command;
+
+// command table
+Command commands[] = {
+    {"HELP", cmd_help},
+    {"?", cmd_help},
+    {"COMMIT", cmd_commit},
+    {"SHOW", cmd_show},
+    {"DIR", cmd_dir},
+    {"CD", cmd_cd},
+    {"SET", cmd_set},
+    
+};
 
 
 // Variable table
@@ -50,45 +79,58 @@ Variable variables[NUM_VARIABLES] = {
 };
 
 
-FRESULT scan_files(char *path) {  
+
+// change the directory (sub directory not suported)
+FRESULT change_dir(const char *path) {
+    
+    lastDir = dir; // save encase of errors.
+    
+    // to go back twards root by 1
+    if (strcmp(path, "..") == 0) path = "";
+    
+    // set the new system directory
     errCodeSD = pf_opendir(&dir, path);
-    if (errCodeSD == FR_OK) {
-        while (true) {
-            errCodeSD = pf_readdir(&dir, &fno);
-            if (errCodeSD != FR_OK || fno.fname[0] == 0) {
-                
-                break;
-            
-            } else { // Print file name, printf formating is broken maybe? this works
-                Serial.print(fno.fname);
-                for (int a = 0; a < MAX_FN_LENGTH - strlen(fno.fname) - 1 ; a++) {
-                  Serial.write(' ');
-                }
-              
-                Serial.printf("  %s  ", (fno.fattrib & AM_DIR) ? "<DIR>" : "     ");
+    if (errCodeSD) {
+        dir = lastDir; // change it back if its an error
+    }
+    
+    return errCodeSD;
+}
 
-                // Print size and label if not directory
-                if (!(fno.fattrib & AM_DIR)) {
-                  Serial.printf("%10lu", fno.fsize); 
-                  
-                } else {
-                  for (int a = 0; a < 10 ; a++) {
-                    Serial.write(' ');
-                  }
-                }
-                 Serial.printf("  %02u/%02u/%04u  %02u:%02u:%02u",
-                              ((fno.fdate >> 5) & 0xF), (fno.fdate & 0x1F),
-                              ((fno.fdate >> 9) + 1980),
-                              (fno.ftime >> 11), ((fno.ftime >> 5) & 0x3F),
-                              ((fno.ftime & 0x1F) * 2));
-                
-            }
-      
-            // Print a newline after each file
-            Serial.println();
-        }
-   }
+// displays a directory entry. TODO: filtering for things like *.BAS etc.
+FRESULT scan_files(void) {  
+    errCodeSD = pf_readdir(&dir, &fno);
+    if (errCodeSD || (fno.fname[0] == 0)) { 
+      return errCodeSD; // we are done for 1 reson or another.
+    }
+    // Print file name, printf formating is broken maybe? this works
+    Serial.print(fno.fname);
+    for (int a = 0; a < MAX_FN_LENGTH - strlen(fno.fname) - 1 ; a++) {
+      Serial.write(' ');
+    }
 
+    // Print file type          
+    Serial.printf("  %s  ", (fno.fattrib & AM_DIR) ? "<DIR>" : "     ");
+
+    // Print size and label if not directory TODO: commas, every thousands
+    if (!(fno.fattrib & AM_DIR)) {
+      Serial.printf("%10lu", fno.fsize); 
+    } else {  // blank out column in case of directory. 
+      for (int a = 0; a < 10 ; a++) {
+        Serial.write(' ');
+      }
+    }
+
+    // Prinnt date and time (NA format date)
+    Serial.printf("  %02u/%02u/%04u  %02u:%02u:%02u",
+      ((fno.fdate >> 5) & 0xF), (fno.fdate & 0x1F),
+      ((fno.fdate >> 9) + 1980),
+      (fno.ftime >> 11), ((fno.ftime >> 5) & 0x3F),
+      ((fno.ftime & 0x1F) * 2));
+                
+    // Print a newline after each file
+    Serial.println();
+        
     return errCodeSD;
 }
 
@@ -96,7 +138,7 @@ FRESULT scan_files(char *path) {
 
 
 // test for a valid hex digit otherwise return false
-bool isHex(const String& str) {
+static bool isHex(const String& str) {
     for (size_t i = 0; i < str.length(); i++) {
         char c = str.charAt(i);
         if (!isxdigit(c)) {
@@ -106,7 +148,7 @@ bool isHex(const String& str) {
     return true;
 }
 
-void setVariable(int index, const char* value) {
+static void setVariable(int index, const char* value) {
     if (value == nullptr || value[0] == '\0') {
         // Empty or null input value, do nothing
         return;
@@ -198,6 +240,93 @@ String readSerialLine() {
   return input; // Return the input string
 }
 
+static void cmd_help (const char* variable, const char* value) { 
+    Serial.println(F("vCMOS Commands"));
+    Serial.println(F("--------------"));
+    Serial.println(F("You can do:"));
+    Serial.println();
+    Serial.println(F("CD       - Change directory off of root you can"));
+    Serial.println(F("            - CD ..     | go to root directory"));
+    Serial.println(F("            - CD <NAME> | go to directory"));
+    Serial.println(F("              (sub directories not supported"));
+    Serial.println(F("COMMIT   - Commit any pending changes to memory"));
+    Serial.println(F("DIR      - List all files in current directory"));
+    Serial.println(F("HELP     - Display help information"));
+    Serial.println(F("QUIT     - Exit the program"));
+    Serial.println(F("SET      - Define a system variable with a hexadecimal address value or string"));
+    Serial.println(F("            Usage:   SET <VARIABLE> {ADDRESS} | {STRING}"));
+    Serial.println(F("            Example: SET START C000"));
+    Serial.println(F("                     SET FILE BIOS.ROM"));
+    Serial.println(F("SHOW     - Display all variables"));
+    Serial.println();
+    Serial.println(F("To display this dialog, type '?' and press <ENTER>"));
+}
+
+static void cmd_commit (const char* variable, const char* value) { 
+    updateEEPROM(biosStart,biosSize,biosName);
+    Serial.println(F("Committing changes..."));
+}
+
+static void cmd_show (const char* variable, const char* value) {
+    showVariables();
+}
+
+static void cmd_dir (const char* variable, const char* value) { 
+    lastDir = dir;  // save for later
+    while(true) {
+        errCodeSD = scan_files();
+        if (errCodeSD) { 
+            printErrSD(2,errCodeSD,NULL);
+            break; // fail out error!
+        } else if (fno.fname[0] == 0) {
+            break; // were done.
+        }
+        // were not done yet..
+        } 
+        dir = lastDir; // restore directory
+}
+
+static void cmd_cd  (const char* variable, const char* value) {
+    errCodeSD = change_dir(variable);
+        if (errCodeSD) {
+            printErrSD(2,errCodeSD,variable);
+        
+        }
+}
+
+static void cmd_set(const char* variable, const char* value) {
+    int found = 0;
+    for (int i = 0; i < NUM_VARIABLES; i++) {
+        if (strcmp(variable, variables[i].name) == 0) {
+            setVariable(i, value);
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        Serial.println(F("Unknown variable"));
+    }
+}
+
+
+
+static uint8_t commandProcessor(const char* cmd, const char* variable, const char* value) {
+    if (strcmp(cmd, "QUIT") == 0) {
+       Serial.println(F("Quitting..."));
+       return(1); // we're done.
+    }
+    for (int i = 0; i < sizeof(commands)/sizeof(Command); i++) {
+        if (strcmp(cmd, commands[i].name) == 0) {
+            commands[i].function(variable, value);
+            return(0); // we're not done 
+        }
+        
+    }
+    
+    Serial.println(F("Unknown command"));
+    return (0); // we're not done
+}
 
 // Function to process the commands
 uint8_t processCommand(const String& command) {
@@ -211,66 +340,6 @@ uint8_t processCommand(const String& command) {
     }
     
     sscanf(command.c_str(), "%s %s %s", cmd, variable, value);
-
-    // SET
-    if (strcmp(cmd, "SET") == 0) {
-        int found = 0;
-        for (int i = 0; i < NUM_VARIABLES; i++) {
-            if (strcmp(variable, variables[i].name) == 0) {
-                setVariable(i, value);
-                found = 1;
-                break;
-            }
-        }
-
-        if (!found) {
-            Serial.println(F("Unknown variable"));
-        }
-
-    // DIR
-    } else if (strcmp(cmd, "DIR") == 0) {
-        errCodeSD = scan_files("");
-        if (errCodeSD) { 
-          printErrSD(2,errCodeSD,NULL);
-          
-        }
-        
    
-    // SHOW
-    } else if (strcmp(cmd, "SHOW") == 0) {
-        showVariables();
-    
-    // COMMIT    
-    } else if (strcmp(cmd, "COMMIT") == 0) {
-        updateEEPROM(biosStart,biosSize,biosName);
-        Serial.println(F("Committing changes..."));
-    
-    // QUIT
-    } else if (strcmp(cmd, "QUIT") == 0) {
-        Serial.println(F("Quitting..."));
-        return(1); // were done
-    
-    } else if (strcmp(cmd, "?") == 0) {
-        Serial.println(F("vCMOS Commands"));
-        Serial.println(F("--------------"));
-        Serial.println(F("You can do:"));
-        Serial.println();
-        Serial.println(F("COMMIT   - Commit any pending changes to memory"));
-        Serial.println(F("DIR      - List all files in current directory"));
-        Serial.println(F("HELP     - Display help information"));
-        Serial.println(F("QUIT     - Exit the program"));
-        Serial.println(F("SET      - Define a system variable with a hexadecimal address value or string"));
-        Serial.println(F("            Usage:   SET <VARIABLE> {ADDRESS} | {STRING}"));
-        Serial.println(F("            Example: SET START C000"));
-        Serial.println(F("                     SET FILE BIOS.ROM"));
-        Serial.println(F("SHOW     - Display all variables"));
-        Serial.println();
-        Serial.println(F("To display this dialog, type '?' and press <ENTER>"));
-    
-        
-    } else {
-        Serial.println(F("Unknown command"));
-        
-    }
-    return(0); // were not done yet
-}
+    return (commandProcessor(cmd,variable,value)); // process the command through a jump table.
+}    
