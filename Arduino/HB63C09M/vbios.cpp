@@ -4,9 +4,19 @@
 
 // this is a minimal staging envorment for the HB63C09M. This uses sd direct access vs iOS floppy emulation
 // its a WYSIWYG command interpereter, pressing ? <enter> shows avalible commands.
- 
-//PetitFS licence:
-/*
+
+/* 
+Attribution: 
+
+IOS/Z80-MBC Code for Floppy emulation is (C) Fabio Defabis under the GPL 3.0
+In line call outs within the code specify where this is the case. (in HB63C09M main sketch)
+Details for the Z80-MBC2 project are: 
+https://github.com/SuperFabius/Z80-MBC2
+
+SD library from: https://github.com/greiman/PetitFS (based on 
+PetitFS: http://elm-chan.org/fsw/ff/00index_p.html)
+
+PetitFS licence:
 /-----------------------------------------------------------------------------/
 /  Petit FatFs - FAT file system module  R0.03                  (C)ChaN, 2014
 /-----------------------------------------------------------------------------/
@@ -23,7 +33,6 @@
 /
 /-----------------------------------------------------------------------------/
 */
-
 
 // vcmos.cpp
 
@@ -47,9 +56,9 @@ typedef void (*CommandFunc)(const char*, const char*);
 
 // Structure to represent a variable
 typedef struct {
-    char name[20];
+    char name[VAR_SYMBOL_LENGTH];
     void *ptr;
-    char formatSpecifier[5];
+    char formatSpecifier[VAR_FORMAT_LENGTH];
 } Variable;
 
 // command table structure 
@@ -75,9 +84,25 @@ Command commands[] = {
 Variable variables[NUM_VARIABLES] = {
     {"START", &biosStart, "%X"},
     {"SIZE", &biosSize, "%X"},
-    {"FILE", &biosName, "%s"}
+    {"FILE", &biosName, "%s"},
+    {"PATH", &curPath, "%s"}
 };
 
+void buildFilePath(const char* directory, const char* filename) {
+    switch(strlen(directory)) {
+
+      // root directory 
+      case 0: // fall through to 1 ( this is 0 or 1)
+      case 1:
+        sprintf(filePath, "/%s",filename);
+        break;
+      
+      // sub directory 
+      default :
+        sprintf(filePath, "/%s/%s", directory, filename);
+    }
+    
+}
 
 
 // change the directory (sub directory not suported)
@@ -86,14 +111,14 @@ FRESULT change_dir(const char *path) {
     lastDir = dir; // save encase of errors.
     
     // to go back twards root by 1
-    if (strcmp(path, "..") == 0) path = "";
+    if (strcmp(path, "..") == 0) path = "/";
     
     // set the new system directory
     errCodeSD = pf_opendir(&dir, path);
     if (errCodeSD) {
         dir = lastDir; // change it back if its an error
     }
-    
+    strcpy(curPath, path);  // copy the new path name for later
     return errCodeSD;
 }
 
@@ -133,8 +158,6 @@ FRESULT scan_files(void) {
         
     return errCodeSD;
 }
-
-
 
 
 // test for a valid hex digit otherwise return false
@@ -245,11 +268,11 @@ static void cmd_help (const char* variable, const char* value) {
     Serial.println(F("--------------"));
     Serial.println(F("You can do:"));
     Serial.println();
-    Serial.println(F("CD       - Change directory off of root you can"));
+    Serial.println(F("CD       - Change directory off of root. Example commands:"));
     Serial.println(F("            - CD ..     | go to root directory"));
     Serial.println(F("            - CD <NAME> | go to directory"));
-    Serial.println(F("              (sub directories not supported"));
-    Serial.println(F("COMMIT   - Commit any pending changes to memory"));
+    Serial.println(F("              (subdirectorys not supported)"));
+    Serial.println(F("COMMIT   - Commit any pending changes to EEPROM in AVR"));
     Serial.println(F("DIR      - List all files in current directory"));
     Serial.println(F("HELP     - Display help information"));
     Serial.println(F("QUIT     - Exit the program"));
@@ -263,7 +286,7 @@ static void cmd_help (const char* variable, const char* value) {
 }
 
 static void cmd_commit (const char* variable, const char* value) { 
-    updateEEPROM(biosStart,biosSize,biosName);
+    updateEEPROM();
     Serial.println(F("Committing changes..."));
 }
 
@@ -286,7 +309,7 @@ static void cmd_dir (const char* variable, const char* value) {
         dir = lastDir; // restore directory
 }
 
-static void cmd_cd  (const char* variable, const char* value) {
+static void cmd_cd  (const char* variable, const char* value) {  
     errCodeSD = change_dir(variable);
         if (errCodeSD) {
             printErrSD(2,errCodeSD,variable);
@@ -310,7 +333,7 @@ static void cmd_set(const char* variable, const char* value) {
 }
 
 
-
+// this is the command processor
 static uint8_t commandProcessor(const char* cmd, const char* variable, const char* value) {
     if (strcmp(cmd, "QUIT") == 0) {
        Serial.println(F("Quitting..."));
@@ -328,15 +351,33 @@ static uint8_t commandProcessor(const char* cmd, const char* variable, const cha
     return (0); // we're not done
 }
 
-// Function to process the commands
+// Function to parce the command line
 uint8_t processCommand(const String& command) {
-    char cmd[10];
-    char variable[20];
+    char cmd[VAR_SYMBOL_LENGTH];
+    char variable[VAR_SYMBOL_LENGTH];
     char value[MAX_FN_LENGTH];
-
+/*
     if (command.length() == 0) {
       // empty command do nothing 
       return 0;
+    }
+*/
+    // edge case fixes
+    switch (command.length()) {
+      
+      // empty command
+      case 0:
+        // nothing to do return to command processor prompt
+        return 0;
+        
+      // "CD" or "CD " with no additional information
+      case 2:  // fall through to 3 if needed
+      case 3:
+        if ((command[0] == 'C') && (command[1] == 'D')) {
+          printErrSD(2,3,NULL);  // no or missing file (directory) info from command processor
+          return 0;
+        }
+        break;
     }
     
     sscanf(command.c_str(), "%s %s %s", cmd, variable, value);

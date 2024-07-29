@@ -1,6 +1,36 @@
 // const.h
 // constant defs for HB63C09M
 
+/* 
+Attribution: 
+
+IOS/Z80-MBC Code for Floppy emulation is (C) Fabio Defabis under the GPL 3.0
+In line call outs within the code specify where this is the case. (in HB63C09M main sketch)
+Details for the Z80-MBC2 project are: 
+https://github.com/SuperFabius/Z80-MBC2
+
+SD library from: https://github.com/greiman/PetitFS (based on 
+PetitFS: http://elm-chan.org/fsw/ff/00index_p.html)
+
+PetitFS licence:
+/-----------------------------------------------------------------------------/
+/  Petit FatFs - FAT file system module  R0.03                  (C)ChaN, 2014
+/-----------------------------------------------------------------------------/
+/ Petit FatFs module is a generic FAT file system module for small embedded
+/ systems. This is a free software that opened for education, research and
+/ commercial developments under license policy of following trems.
+/
+/  Copyright (C) 2014, ChaN, all right reserved.
+/
+/ * The Petit FatFs module is a free software and there is NO WARRANTY.
+/ * No restriction on use. You can use, modify and redistribute it for
+/   personal, non-profit or commercial products UNDER YOUR RESPONSIBILITY.
+/ * Redistributions of source code must retain the above copyright notice.
+/
+/-----------------------------------------------------------------------------/
+*/
+
+
 #ifndef CONST_H
 #define CONST_H
 
@@ -54,6 +84,7 @@ const uint8_t NIBBLE_MASK  = 252; // Shifted nibble mask as it appears on the C 
 
 // MAX CHARACTERS IN A FILENAME WITH NULL  (petitFS uses this legnth)
 #define MAX_FN_LENGTH 13  
+#define MAX_PT_LENGTH ((MAX_FN_LENGTH *2)+2)
 
 // ASCII ESC for vCMOS
 #define ESC_KEY 27
@@ -68,7 +99,8 @@ const char DEFAULT_BIOS_NAME[MAX_FN_LENGTH] = "BIOS.BIN";
 const int BIOS_START_ADDR = 0;
 const int BIOS_SIZE_ADDR = sizeof(uint16_t);                  // normally 2
 const int BIOS_NAME_ADDR = BIOS_SIZE_ADDR + sizeof(uint16_t); // normally 4
-const int CHECKSUM_ADDR = BIOS_NAME_ADDR + MAX_FN_LENGTH;     // Assuming 11 bytes for biosName and 1 byte for '\0'
+const int BIOS_PATH_ADDR = BIOS_NAME_ADDR + MAX_FN_LENGTH;    // Assuming 13 bytes for biosName
+const int CHECKSUM_ADDR = BIOS_PATH_ADDR + MAX_FN_LENGTH;     // Assuming 13 bytes for biosPath
 
 
 

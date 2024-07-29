@@ -92,6 +92,8 @@ FRESULT  errCodeSD;                   // Temporary variable to store error codes
 FILINFO  fno;                         // current derectory file info 
 DIR      dir;                         // current directory 
 DIR      lastDir;                     // temp directory storage, the last entered directory 
+char     filePath[MAX_PT_LENGTH];     // filePath space for the current calculated path 
+char     curPath[MAX_FN_LENGTH];      // this is the current path name.
 uint8_t  numReadBytes;                // Number of read bytes after a readSD() call
 uint8_t  loaderReg = 0;               // loader register.
 uint16_t loaderAddr= 0;               // this is the loader current address.
@@ -182,13 +184,7 @@ if (RAMRead(0xFFFF) == 42) {
   Serial.println();  
   Serial.println(F("Current vBIOS settings:"));
   // Read from EEPROM
-  EEPROM.get(BIOS_START_ADDR, biosStart);
-  EEPROM.get(BIOS_SIZE_ADDR, biosSize);
-  for (int i = 0; i < sizeof(biosName); i++) {
-     biosName[i] = EEPROM.read(BIOS_NAME_ADDR + i);
-  }
-  biosName[sizeof(biosName) - 1] = '\0';  // ensure null termination 
-  EEPROM.get(CHECKSUM_ADDR, storedChecksum);
+  readEEPROM();
 
   // Calculate checksum
   calculatedChecksum = calculateChecksum(biosStart, biosSize, biosName);
@@ -197,44 +193,33 @@ if (RAMRead(0xFFFF) == 42) {
     
     // Print each variable with its label
     showVariables(); // show current EEPROM Settings
-
+    Serial.println();
+    
     Serial.println(F("press <ESC> for vBIOS"));
+    Serial.println();
     if (waitForEscape(3000)) {
-      Serial.println();
-      Serial.println(F("Welcome to HB63C09M vBIOS!"));
-      Serial.println(F(" (C) 2023 - D. Collins (Z80Dad)"));
-      Serial.println();
-      Serial.println(F("Type '?' for Commands "));
-      Serial.println();
-      Serial.print(F("> "));
-      change_dir(""); // set to root directory
-      while(true) {
-        if(Serial.available()) {
-          if(processCommand(readSerialLine())) {
-            Serial.println();
-            break;
-          } else {
-            Serial.print(F("> "));
-          }
-        } else { 
-            delay(10);  // prevent wait blocking 
-        }
-  
-      }
+      showLeadIn(); // show the vBios Leadin on serial out
+      change_dir("/"); // set to root directory, this sets up the defalut state.
+      vbiosStart(); // call the interpreter
+      
     }   
 
 
   } else {
       // Data is invalid or EEPROM is not initialized, update with default values
-      Serial.println(F("Data in EEPROM is invalid or uninitialized. Updating with default values."));
+      Serial.println(F("Data in EEPROM is invalid or uninitialized. starting vBIOS..."));
       // Update with default values
-      updateEEPROM(DEFAULT_BIOS_START, DEFAULT_BIOS_SIZE, DEFAULT_BIOS_NAME);
-     
+      // updateEEPROM(DEFAULT_BIOS_START, DEFAULT_BIOS_SIZE, DEFAULT_BIOS_NAME);
+      Serial.println();
+      showLeadIn(); // show the vBios Leadin 
+      change_dir("/"); // set to root directory, this sets up the defalut state.
+      
+      vbiosStart(); // call the interpereter
   }
   
-  
-  Serial.printf("IOS: Mounting %s volume...",biosName);
-  diskErr = openSD(biosName);       // open the bios volume
+  buildFilePath(curPath, biosName);
+  Serial.printf("IOS: Mounting %s volume...",filePath);
+  diskErr = openSD(filePath);       // open the bios volume
   if (diskErr) {
     printErrSD(1,diskErr,biosName); // print error message
     Serial.println(F(" ... Halt!"));
@@ -630,7 +615,7 @@ void loop(){
                //the uart to the bus.
 
                busData = Serial.read();
-              
+                 // TODO: -- Needs to 
                break; // end of read uart 
               
               case 0x02:
@@ -910,23 +895,43 @@ uint8_t RAMRead(uint16_t addr) {
     return(ioData); 
 }
 
-void updateEEPROM(uint16_t newStart, uint16_t newSize, const char* newName) {
+void updateEEPROM(void) {
     // Update BIOS parameters in EEPROM
-    EEPROM.put(BIOS_START_ADDR, newStart);
-    EEPROM.put(BIOS_SIZE_ADDR, newSize);
+    EEPROM.put(BIOS_START_ADDR, biosStart);
+    EEPROM.put(BIOS_SIZE_ADDR, biosSize);
+    // blank space to update eeprom
     for (int i = 0; i < MAX_FN_LENGTH; i++) {
         EEPROM.write(BIOS_NAME_ADDR + i, 0);
     }
-    for (int i = 0; i < strlen(newName); i++) {
-        EEPROM.write(BIOS_NAME_ADDR + i, newName[i]);
+    for (int i = 0; i < strlen(biosName); i++) {
+        EEPROM.write(BIOS_NAME_ADDR + i, biosName[i]);
     }
-    
+    // blank space to update eeprm
+    for (int i = 0; i < MAX_FN_LENGTH; i++) {
+        EEPROM.write(BIOS_PATH_ADDR + i, 0);
+    }
+    for (int i = 0; i < MAX_FN_LENGTH; i++) {
+        EEPROM.write(BIOS_PATH_ADDR + i, curPath[i]);
+    }
     // Update checksum
-    uint8_t newChecksum = calculateChecksum(newStart, newSize, newName);
+    uint8_t newChecksum = calculateChecksum(biosStart,biosSize,biosName);
     EEPROM.write(CHECKSUM_ADDR, newChecksum);
  
 }
 
+void readEEPROM(void) {
+  EEPROM.get(BIOS_START_ADDR, biosStart);
+  EEPROM.get(BIOS_SIZE_ADDR, biosSize);
+  for (int i = 0; i < sizeof(biosName); i++) {
+     biosName[i] = EEPROM.read(BIOS_NAME_ADDR + i);
+  }
+  biosName[sizeof(biosName) - 1] = '\0';  // ensure null termination 
+  for (int i = 0; i < sizeof(curPath); i++) {
+    curPath[i] = EEPROM.read(BIOS_PATH_ADDR + i);
+  }
+  curPath[sizeof(curPath) - 1] = '\0'; // ensure null termination
+  EEPROM.get(CHECKSUM_ADDR, storedChecksum);
+}
 
 bool waitForEscape(int timeoutMillis) {
     unsigned long startTime = millis();
@@ -955,7 +960,34 @@ uint8_t calculateChecksum(uint16_t start, uint16_t size, const char* name) {
     return checksum;
 }
 
+void vbiosStart (void) {
+while(true) {
+        // if a comand is waiting...
+        if(Serial.available()) {  
+          // see vbios.cpp / vbios.h for detals of processing commands
+          if(processCommand(readSerialLine())) {
+            Serial.println();
+            break;
+          } else {
+            Serial.println();
+            Serial.print(F("> "));
+          }
+        } else { 
+            delay(10);  // prevent wait blocking 
+        }
+  
+      }
+}
 
+void showLeadIn(void) {
+    Serial.println();
+    Serial.println(F("Welcome to HB63C09M vBIOS!"));
+    Serial.println(F(" (C) 2023 - D. Collins (Z80Dad)"));
+    Serial.println();
+    Serial.println(F("Type '?' for Commands "));
+    Serial.println();
+    Serial.print(F("> "));
+}
 // IOS SD Card routines for Z80-MBC2 floppy emulation See *** Attribution at top ***
 // ------------------------------------------------------------------------------
 
