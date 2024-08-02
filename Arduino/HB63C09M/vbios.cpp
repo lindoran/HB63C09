@@ -108,7 +108,7 @@ void buildFilePath(const char* directory, const char* filename) {
 // change the directory (sub directory not suported)
 FRESULT change_dir(const char *path) {
     
-    lastDir = dir; // save encase of errors.
+    lastDir = dir; // save incase of errors.
     
     // to go back twards root by 1
     if (strcmp(path, "..") == 0) path = "/";
