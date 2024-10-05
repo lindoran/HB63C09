@@ -1,5 +1,12 @@
 # TEST PROGRAMS
 
+These files are for the Assist09 Monitor - not MON09, to use please select combo in vBIOS as your start up 
+enviornment.
+
+The source code is provided in C to remove complexity --- ultimately its most likely better to write these routines 
+in assembly but I've used pointers here so that its obvious how to write to a LBA volume.
+
+
 <pre>
 filetest.c  -  loads the data into memory from the first sector of Disk DS0N00.DSK
                then the data is modified by adding the string "This is a test!" preceeding

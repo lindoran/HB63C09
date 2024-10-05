@@ -45,8 +45,11 @@ void my_strcpy(char* dest, const char* src) {
 }
 
 int main (void) {
-     //setConsoleOutHook(newOutputRoutine);            // This reddirects the console output.
-
+    
+    // below we write to SELTRACK 2X because the MCU keeps track of the MSB / LSB..
+    // remember that the numbering system is BIG endian.  So you write the MSB then
+    // the LSB.  This is done to make it easyer to copy numbers from memory more simply
+    
      *SELDISK = 0;
      *SELTRACK = 0;
      *SELTRACK = 0; // this is a 16 bit value we must write it twice.
@@ -81,16 +84,6 @@ int main (void) {
 }
 
 
-/*
-// lets redirect printf... ASSIST09 has a built in character output
-asm void newOutputRoutine(void) {
-    asm {
-        pshs    x,b         // save registers swi handler uses them
-        swi
-        fcb     OUTCH       // system call to ASSIST09 Sends ch in A Reg to Screen
-        puls     b,x        // put them back
-    }
-}
-*/
+
 
 

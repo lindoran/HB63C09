@@ -22,6 +22,8 @@
 ;         THE CHIP FOR THIS TO WORK.	
 ;       - BELOW IS THE LEAD IN FROM GREG'S SOURCE (DigiCoolThings) From his repo: 
 ;         https://github.com/DigicoolThings/MECB
+;       
+;        z80dad@gmail.com        MAR, 2024
 
 ;Based on Grant Searle's published AS9 compatible Assembler source code.
 ;	Refer: http://searle.x10host.com/6809/Simple6809.html
@@ -40,7 +42,7 @@
 ;
 ;  
 ;
-;       z80dad@gmail.com        MAR, 2024
+
 
           SETDP	$00		 ; Tell asm6809 Assembler Direct Page is det for Zero Page.
 

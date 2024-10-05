@@ -1,8 +1,3 @@
-
-// This is very rough - be advised - at any time this could be broken.
-// I will implement a version control mechanic when we get ready to release REV4
-
-
 /*
 HB63C09 Sketch is (C) David Collins under the terms of the GPL 3.0 (see repo)
 https://github.com/lindoran/HB63C09
@@ -44,13 +39,13 @@ to develop this system see their website at http://pcbway.com
 
 */
 
-#include "const.h"
+#include "const.h"  // many constants are defined here.
 #include <stdint.h>
 #include <Wire.h>
 #include <EEPROM.h>
 #include "PetitFS.h"
-#include "blockcopy.h"
-#include "vbios.h"
+#include "blockcopy.h"  // this is the bootstrap machine code
+#include "vbios.h"  // this is the staging set up environment.
 
 
 //RAM Write accsess time - best to not mess with this
@@ -60,7 +55,7 @@ to develop this system see their website at http://pcbway.com
 #define DO_TWICE_NOP() \
 do { \
     __asm__ __volatile__ ("nop\n\t"); \
-    __asm__ __volatile__ ("nop\n\t"); \
+    __asm__ __volatile__ ("nop\n\t"); \ 
 } while(0)
 
 
@@ -78,7 +73,7 @@ void write_a_nibble(uint16_t data);   // forward def, see code block below ex: w
 
 // File name Defines for IOS
 
-#define   M6X09DISK     "DSxNyy.DSK"  // Generic 6x09 disk name (from DS0N00.DSK to DS9N99.DSK)
+#define   M6X09DISK     "DS0N00.DSK"  // Generic 6x09 disk name (from DS0N00.DSK to DS9N99.DSK)
 
 // Global System variables  -- see const.h for readabiblity constants
 
@@ -108,13 +103,13 @@ const char *  fileNameSD;             // Pointer to the string with the currentl
 
 FATFS    filesysSD;                   // Filesystem object (PetitFS library)
 uint8_t  bufferSD[32];                // I/O buffer for SD disk operations (store a "segment" of a SD sector).
-char  diskName[MAX_FN_LENGTH] = M6X09DISK;    // String used for virtual disk file name
+char  diskName[MAX_FN_LENGTH] = M6X09DISK;    // String used for virtual disk file name -- always selects disk zero after staging in the current directory
 uint16_t trackSel;                    // Store the current track number [0..511]
 uint8_t  sectSel;                     // Store the current sector number [0..31]
 uint8_t  diskErr = 19;                // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
                                       //  error code
 uint8_t  numWriBytes;                 // Number of written bytes after a writeSD() call
-uint8_t  diskSet = 0;                 // Current "Disk Set"  -- TODO*** NEED TO BUILD SUPPORT FOR MULTIPLE SETS ***
+uint8_t  diskSet = 0;                 // Current "Disk Set"  -- since subdirectories all disk sets are 0, each system rom will have it's own disk sets.
 
 // constants
 const byte    maxDiskNum   = 99;          // Max number of virtual disks
@@ -129,6 +124,8 @@ bitSet(PORTD, IOGNT_);
 bitSet(DDRB, RES_); // seting these to outputs simply sets them low
 bitSet(DDRB, HALT_);
 bitSet(DDRD, BCLK); // set up the bank clock pin to output
+
+
 
 // 63C09 System is in tri-state
 
@@ -146,10 +143,12 @@ while(!Serial); // waiting for USB Serial to load.
 RAMWrite(42,0xFFFF);    //write the meaning of life.
 // its ram?
 if (RAMRead(0xFFFF) == 42) {
+
   Serial.println(F("Staging From RAM..."));
   Serial.println(F("Bootstrap Code loading at 0xFFC0...") );  
+  
   loaderAddr = blockcopy_blks[0].start;
-
+  // int lcnt = 0;
   for (unsigned int j = 0; j < blockcopy_blks[0].len; ++j) {
     RAMWrite(blockcopy_blks[0].data[j],loaderAddr);
     loaderAddr++;
@@ -158,10 +157,10 @@ if (RAMRead(0xFFFF) == 42) {
   // set the reset vector to the begining of the loader
   RAMWrite(0xFF, 0xFFFE);
   RAMWrite(0xC0, 0xFFFF);  
-  
+    
   // mount the SD Card to initiaize HB63C09 - IOS Floppy emulation 
   // see Attribuition at top
-  Serial.print("IOS: Attempting to mount SD Card");
+  Serial.print(F("IOS: Attempting to mount SD Card"));
   if (mountSD(&filesysSD))
    // Error mounting. Try again
    {
@@ -224,7 +223,7 @@ if (RAMRead(0xFFFF) == 42) {
     printErrSD(1,diskErr,biosName); // print error message
     Serial.println(F(" ... Halt!"));
     while(1);  // halt.
-  }
+  }DS0N00.DSK
   // seek to 0 just in case 
   diskErr = seekSD(0);
    if (diskErr) {
@@ -238,7 +237,7 @@ if (RAMRead(0xFFFF) == 42) {
 }
 
 Serial.println();
-Serial.println(F("Switching Bus Mastering to HC63C09..."));
+Serial.println(F("Switching Bus Mastering to HD63C09..."));
 // run state 
 write_a_nibble(0);      
 ddr_a_nibble(READ_MODE); // address bus should be tri-stated
@@ -248,7 +247,7 @@ bitClear(DDRB, R_W);
 bitClear(DDRD, XSIN_);
 
 
-Serial.println(F("HC63C09 is now on the bus..."));
+Serial.println(F("HD63C09 is now on the bus..."));
 
 // flush the RX buffer to clear spurius inputs due to dongle power up
 // this avoids issues displaying the incomming prompt text.
@@ -291,7 +290,7 @@ void loop(){
         *   0xA004    - SELSECT*   - Select Disk Sector ie: 0..31  
         *   0xA005    - WRITESECT* - Write a Sector to the Disk (512 bytes in sequence) 
         *   ...
-        *   0xA03F    - LOADERR    - This is the loader register, it is unlocked by writing 255 after boot up.
+        *   0xA03E    - LOADERR    - This is the loader register, it is unlocked by writing 255 after boot up.
         *   0xA03F    - SETBANK    - Write the low nibble (3 bits) on the data bus to the bank register
         *  
         *  READ OPERATIONS:  
@@ -363,6 +362,9 @@ void loop(){
               //         a maximum of 16 disks)
               // NOTE 2: Because SELDISK opens the "disk file" used for disk emulation, before using WRITESECT or READSECT
               //         a SELDISK must be performed at first.
+              // NOTE 3: vBios uses directories to separate the emulated file systems with their boot images]'
+              //         each fill will be named DS0N00.DSK, DS0N01.DSK, DS0N02 ... and so on.  The file names 
+              //         will follow this convetion for each subdirectory with an emulated file system.
 
               if (busData <= maxDiskNum)             // Valid disk number
               // Set the name of the file to open as virtual disk, and open it
@@ -370,7 +372,8 @@ void loop(){
                 diskName[2] = diskSet + 48;         // Set the current Disk Set
                 diskName[4] = (busData / 10) + 48;   // Set the disk number
                 diskName[5] = busData - ((busData / 10) * 10) + 48;
-                diskErr = openSD(diskName);         // Open the "disk file" corresponding to the given disk number
+                buildFilePath(curPath, diskName);    // support vBIOS Path names
+                diskErr = openSD(filePath);         // Open the "disk file" corresponding to the given disk number
               }
               else diskErr = 16;                    // Illegal disk number
               break;
@@ -780,6 +783,12 @@ void loop(){
                     loaderReg = 0; // re-lock the loader
                     lastOp = 255;  // reset last op (this value makes certain a new operation is initiated.)
                     busIO();       // send the cpu back to run mode
+                    
+                    // quickly select first LBA volume on boot.
+                    buildFilePath(curPath, diskName);
+                    Serial.println(F("LOADER: Finished bootstrap"));
+                    Serial.printf("IOS: Setting disk to %s ...",filePath);
+                    diskErr = openSD(filePath);       // open the first LBA Volume in the selected ROM directory.
                     bitSet(DDRB, RES_);
                     bitClear(DDRB, RES_); // reset
                   }

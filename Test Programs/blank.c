@@ -1,5 +1,6 @@
 #include <cmoc.h>
 
+#pragma org 0x4000         // start assembling here. (this is the bottom of the 24K fixed block)
 #define IO_BASE_ADDRESS 0xA000
 
 // I/O addresses for disk operations
@@ -28,8 +29,8 @@ void fillDiskWithZeros(void) {
     for (short track = 0; track < NUM_TRACKS; ++track) {
         for (unsigned char sector = 0; sector < NUM_SECTORS_PER_TRACK; ++sector) {
             // Select track and sector
-            *SELTRACK = (unsigned char)track & 0xFF;         // LSB
             *SELTRACK = (unsigned char)((track >> 8) & 0xFF);  // MSB
+            *SELTRACK = (unsigned char)track & 0xFF;         // LSB
             *SELSECT = sector;
 
             // Fill the sector with '00'

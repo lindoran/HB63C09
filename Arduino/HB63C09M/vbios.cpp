@@ -52,6 +52,7 @@ static void cmd_cd(const char*, const char*);
 static void cmd_set(const char*, const char*);
 
 
+
 typedef void (*CommandFunc)(const char*, const char*);
 
 // Structure to represent a variable
@@ -88,6 +89,8 @@ Variable variables[NUM_VARIABLES] = {
     {"PATH", &curPath, "%s"}
 };
 
+char shellPath[MAX_FN_LENGTH]  = "/";  // path the user has set with CD
+
 void buildFilePath(const char* directory, const char* filename) {
     switch(strlen(directory)) {
 
@@ -107,7 +110,6 @@ void buildFilePath(const char* directory, const char* filename) {
 
 // change the directory (sub directory not suported)
 FRESULT change_dir(const char *path) {
-    
     lastDir = dir; // save incase of errors.
     
     // to go back twards root by 1
@@ -118,7 +120,8 @@ FRESULT change_dir(const char *path) {
     if (errCodeSD) {
         dir = lastDir; // change it back if its an error
     }
-    strcpy(curPath, path);  // copy the new path name for later
+    strcpy(shellPath, path); // save the path name for use with set file.
+    // strcpy(curPath, path);  // copy the new path name for later
     return errCodeSD;
 }
 
@@ -181,6 +184,9 @@ static void setVariable(int index, const char* value) {
         // If the format specifier is "%s", copy the string directly
         strncpy(reinterpret_cast<char*>(variables[index].ptr), value, MAX_FN_LENGTH - 1);
         reinterpret_cast<char*>(variables[index].ptr)[MAX_FN_LENGTH - 1] = '\0'; // Ensure null-termination
+        if (index == 2) {
+          strcpy(curPath, shellPath);  // copy the new path name for later
+        }
     } else if (strcmp(variables[index].formatSpecifier, "%X") == 0) {
         // If the format specifier is "%X", parse as hexadecimal
         uint16_t hexValue = 0;
