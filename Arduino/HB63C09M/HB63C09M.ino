@@ -223,7 +223,7 @@ if (RAMRead(0xFFFF) == 42) {
     printErrSD(1,diskErr,biosName); // print error message
     Serial.println(F(" ... Halt!"));
     while(1);  // halt.
-  }DS0N00.DSK
+  }
   // seek to 0 just in case 
   diskErr = seekSD(0);
    if (diskErr) {

@@ -1,0 +1,148 @@
+ AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 1 - 10/05/2024 08:57:59 PM
+
+
+    1/   0 :                            ;; short block copy
+    2/   0 :                            
+    3/   0 :                            ;; the hb63C09M boot up process 
+    4/   0 :                            ;; The HB63C09M uses a Atmega32A Micro controller as it's io controller.  It handles many of
+    5/   0 :                            ;; the IO features of the system including stageing (herafter refered to as the AVR). 
+    6/   0 :                            ;;
+    7/   0 :                            ;;   1) system enters reset by virtue of the control line attached to the AVR
+    8/   0 :                            ;;   2) system enters halt   "" 
+    9/   0 :                            ;;   3) once halted, the buses (control, addres and data) are held high by the pull ups, 
+   10/   0 :                            ;;      reset and halt are asserted low by the AVR.
+   11/   0 :                            ;;   4) AVR takes control of the bus transceiver, pulling xsin_ low (it does this by setting 
+   12/   0 :                            ;;      the pin to output). It then sets _bioreq low to enable the transceiver by doing the 
+   13/   0 :                            ;;      same.
+   14/   0 :                            ;;   5) AVR takes control of the bus direction by setting the r/w_ pin for the next few steps 
+   15/   0 :                            ;;      this is bit 2 on PORTB (note the data direction from the AVR is opisite the CPU - 
+   16/   0 :                            ;;      so high = write and low = read.) this is PUSH - PULL. 
+   17/   0 :                            ;;   6) AVR uses the "address nibble" bits 2-7 on PORTC to pull the the address lines A0 - A5  
+   18/   0 :                            ;;      low to set the write address for the next few steps as needed. - rememember the  
+   19/   0 :                            ;;      addresses are a logical 'AND' with 0xFFFF.(ADDRESS NIBBLE) by virtue of the pull up 
+   20/   0 :                            ;;      resistors on the bus so setting the address nibble to 0x00 will efectively set the 
+   21/   0 :                            ;;      address bus to 0xFFC0 in terms of the ram chip.  Specifically the pins on PORTC are 
+   22/   0 :                            ;;      set to outputs to pull the lines low and input to set the lines high (essentially an 
+   23/   0 :                            ;;      open collector configuration.)
+   24/   0 :                            ;;   7) AVR sets the frist byte of the reset vector to the address bus, and stores 0x4000 to 
+   25/   0 :                            ;;      the location in memory at 0xFFFE using _bwr and _brd (bits 2 and 3 on PORTD) using a 
+   26/   0 :                            ;;      open collector configuration as described above with the address nibble.  If it can 
+   27/   0 :                            ;;      not read back this byte it asks if it should asume the option rom is installed.
+   28/   0 :                            ;;              - if the option rom is installed, the computer can boot from rom 
+   29/   0 :                            ;;                and flow would skip the following, set the system to a run
+   30/   0 :                            ;;                state, which would set all of the control lines back to their 
+   31/   0 :                            ;;                "run" position as described below in step 9.
+   32/   0 :                            ;;   8) AVR sets to it's lowest meomry loaction addressable (0xFFC0) and loads the following
+   33/   0 :                            ;;      6309 asembly code to the memory.
+   34/   0 :                            ;;   9) The AVR enters a run state, which sets all of the control lines to read, and removes 
+   35/   0 :                            ;;      any internal pull up value after wich it proceeds to release reset and halt to let 
+   36/   0 :                            ;;      the CPU run freely -- the CPU then jumps to the location stored at 0xFFFE (the loader
+   37/   0 :                            ;;      code or the option rom) If its the option rom, computer loads as normal to whatever is 
+   38/   0 :                            ;;      loaded in this space, and flow does not continue to 10
+   39/   0 :                            ;;  10) the byte loader code, being loaded to memory copyies itself to 0x4000, the top of the 
+   40/   0 :                            ;;      fixed block.
+   41/   0 :                            ;;
+   42/   0 :                            ;;      for the next few steps keep in mind AVR can only move 8 bits at a time on to the bus, 
+   43/   0 :                            ;;      and the byte loader on the AVR resides at only one memory location.  Therefore 16 bit 
+   44/   0 :                            ;;      values must be loaded into a split acumulator pair, and transfered to the apropriate  
+   45/   0 :                            ;;      index register afterwards. -- so if it looks like data is being moved around inefficently
+   46/   0 :                            ;;      this is due to that limitation. 
+   47/   0 :                                     
+   48/   0 :                            ;;      The code from this point on is inline commented.
+   49/   0 :                            
+   50/   0 : =$4000                     loader: equ    $4000                    ; copy loader to this location
+   51/   0 :                            
+   52/   0 : =$84                       loadsm: equ    $84                      ; this is the specific byte we write to loader+1
+   53/   0 :                                                                    ; this modifys the code at that location to be 'lda x'
+   54/   0 : =$A03E                     loadfm: equ    $A03E                    ; address of the byte loader
+   55/   0 :                            
+   56/FFC0 :                                    org    $FFC0                    ; this is where the loader is placed by the MCU
+   57/FFC0 : 8E FF CB                           ldx    #CopyBlock               ; copy code starts here
+   58/FFC3 : 10 8E 40 00                        ldy    #loader                  ; destination of loader code - 
+   59/FFC7 : 10 86 00 08                        ldw    #((LstByt+2)-CopyBlock)  ; number of bytes into W 
+   60/FFCB :                            
+ AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 2 - 10/05/2024 08:57:59 PM
+
+
+   61/FFCB :                            ;;  we need to relocate the loader to the static block so we can load the rom space.
+   62/FFCB :                            
+   63/FFCB :                            CopyBlock:
+   64/FFCB : A6 80                              lda    ,x+                      ; transfer a byte
+   65/FFCD : A7 A0                              sta    ,y+                      ; store a byte
+   66/FFCF : 10 5A                              decw                            ; this location is also tracked by the AVR to detrmine 
+   67/FFD1 :                                                                    ; when to reset after the code is loaded
+   68/FFD1 : 26 F8                      LstByt: bne CopyBlock
+   69/FFD3 :                            
+   70/FFD3 :                            ;;  This is a bit tricky, the byte loader sends a new byte at each read attempt
+   71/FFD3 :                            ;;  so when we are reading from the address stored in x multiple times each time
+   72/FFD3 :                            ;;  this is a new value.  See the Arduinio sketch for the specifc structure
+   73/FFD3 :                            ;;  of the stored data (TLDR - byte 1 and 2 = destination address,  byte 3 and 4 contain
+   74/FFD3 :                            ;;  the number of bytes - and the following data is the actual ROM code.)
+   75/FFD3 :                            ;;  The read attempt must be continuious and consecutive or the loader will reset.
+   76/FFD3 :                            ;;  that is, you can not do other IO routines with the AVR while reading the data (like
+   77/FFD3 :                            ;;  use the disk routines or the UART.)
+   78/FFD3 :                            ;;
+   79/FFD3 :                            ;;  keep in mind -  the destionation address is in y, the byte loader address (the AVR) 
+   80/FFD3 :                            ;;  is in x, and the byte count is stored in w.  When the code jumps to the loader this is 
+   81/FFD3 :                            ;;  a modified version of the code above this comment block from CopyBlock to LstByt almost
+   82/FFD3 :                            ;;  exactly -- with the acception that lda ,x+ has now become lda ,x by virtue of the last 
+   83/FFD3 :                            ;;  two lines before the jump.
+   84/FFD3 :                            
+   85/FFD3 :                            
+   86/FFD3 : 8E A0 3E                           ldx   #loadfm                   ; set the start address to the loader
+   87/FFD6 : 86 FF                              lda   #255                      ; unlock code magic nubmer to the loader
+   88/FFD8 : A7 84                              sta   ,x                        ; unlock the loader
+   89/FFDA : A6 84                              lda   ,x                        ; load destiation address into D
+   90/FFDC : E6 84                              ldb   ,x                        ; ''
+   91/FFDE : 1F 02                              tfr   d,y                       ; we will need A
+   92/FFE0 : 11 A6 84                           lde   ,x                        ; byte count into W
+   93/FFE3 : 11 E6 84                           ldf   ,x                        ; ''
+   94/FFE6 : 86 84                              lda   #loadsm                   ; load self modifying code to a
+   95/FFE8 : B7 40 01                           sta   loader+1                  ; modify the code lda ,x+ -> lda ,x
+   96/FFEB : 7E 40 00                           jmp   loader                    ; jump to self copied loader
+   97/FFEE :                            
+   98/FFEE :                            ;;  from this point CPU is in free run, but after 1/4 E the AVR should reset the system
+   99/FFEE :                            ;;  as it has counted along with the w register. From this point the 63C09 should bootstrap
+  100/FFEE :                            ;;  the system by loading 1 byte at a time to the location set by the y register typically
+  101/FFEE :                            ;;  to the top of memory.
+  102/FFEE :                            
+  103/FFEE :                            
+  104/FFEE :                            
+ AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 3 - 10/05/2024 08:57:59 PM
+
+
+  Symbol Table (* = unused):
+  --------------------------
+
+*ARCHITECTURE :                                      "x86_64-unknown-linux" - |
+*CASESENSITIVE :                  0 - | *CONSTPI :     3.141592653589793239 - |
+ COPYBLOCK :                   FFCB C | *DATE :                "10/05/2024" - |
+*FALSE :                          0 - | *FLOATMAX :   1.18973149535725E4932 - |
+*HAS64 :                          1 - | *LISTON :                         1 - |
+ LOADER :                      4000 - |  LOADFM :                      A03E - |
+ LOADSM :                        84 - |  LSTBYT :                      FFD1 C |
+*MACEXP :                         7 - | *MOMCPU :                      6309 - |
+*MOMCPUNAME :                "6309" - | *NESTMAX :                      100 - |
+*PADDING :                        0 - | *PLAINBASE :                      0 - |
+*RELAXED :                        0 - | *TIME :               "08:57:59 PM" - |
+*TRUE :                           1 - | *VERSION :                     142F - |
+
+     23 symbols
+     18 unused symbols
+
+ AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 4 - 10/05/2024 08:57:59 PM
+
+
+  Code Pages:
+  ----------
+
+STANDARD (0 changed characters)
+
+1 code page
+
+0.00 seconds assembly time
+
+    104 lines source file
+      2 passes
+      0 errors
+      0 warnings

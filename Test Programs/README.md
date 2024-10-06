@@ -6,6 +6,9 @@ enviornment.
 The source code is provided in C to remove complexity --- ultimately its most likely better to write these routines 
 in assembly but I've used pointers here so that its obvious how to write to a LBA volume.
 
+to build these you need cmoc at: http://perso.b2b2c.ca/~sarrazip/dev/cmoc.html
+
+which in turn requires: LWTOOLS at http://www.lwtools.ca/
 
 <pre>
 filetest.c  -  loads the data into memory from the first sector of Disk DS0N00.DSK
