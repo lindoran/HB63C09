@@ -207,8 +207,6 @@ if (RAMRead(0xFFFF) == 42) {
   } else {
       // Data is invalid or EEPROM is not initialized, update with default values
       Serial.println(F("Data in EEPROM is invalid or uninitialized. starting vBIOS..."));
-      // Update with default values
-      // updateEEPROM(DEFAULT_BIOS_START, DEFAULT_BIOS_SIZE, DEFAULT_BIOS_NAME);
       Serial.println();
       showLeadIn(); // show the vBios Leadin 
       change_dir("/"); // set to root directory, this sets up the defalut state.
@@ -364,7 +362,7 @@ void loop(){
               //         a SELDISK must be performed at first.
               // NOTE 3: vBios uses directories to separate the emulated file systems with their boot images]'
               //         each fill will be named DS0N00.DSK, DS0N01.DSK, DS0N02 ... and so on.  The file names 
-              //         will follow this convetion for each subdirectory with an emulated file system.
+              //         will follow this convetion for each subdirectory that uses i0S commands inside their ROMS
 
               if (busData <= maxDiskNum)             // Valid disk number
               // Set the name of the file to open as virtual disk, and open it
@@ -533,7 +531,21 @@ void loop(){
               break;
 
              case 0x3E:
-              // LOADERR
+              // LOADERR --
+              /*
+               *   This performs some low level operations (high risk!!) understand how these work before using
+               *  +---------------+---------------------------------------------------------+
+               *  | write byte:   |   Operation:                                            |
+               *  +---------------+---------------------------------------------------------+
+               *  |     01        |  Resets only the 6309, this will not reset the AVR      |
+               *  +---------------+---------------------------------------------------------+
+               *  |     02        |  halts the 6309, remains halted until next sys_reset    |
+               *  +---------------+---------------------------------------------------------+
+               *  |               |  Unlocks the Loader enviornment for the above, or to    |
+               *  |     FF        | stage the computer. (see read operation 0x03E)          |
+               *  +---------------+---------------------------------------------------------+
+               * 
+               */
                switch(busData) {
                 case 0x01:
                   //reset the system
