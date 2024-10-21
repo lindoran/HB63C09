@@ -96,6 +96,12 @@ const uint16_t DEFAULT_BIOS_SIZE = 0x4000;
 const char DEFAULT_BIOS_NAME[MAX_FN_LENGTH] = "BIOS.BIN";
 
 // Define EEPROM addresses for each variable
+// Define EEPROM addresses for each variable
+//  0 BIOS START ADDRESS (2 BYTES)
+//  4 BIOS SIZE (2 BYTES)
+//  8 BIOS NAME (13 BYTES)
+// 21 BIOS PATH (13 BYTES)
+ 
 const int BIOS_START_ADDR = 0;
 const int BIOS_SIZE_ADDR = sizeof(uint16_t);                  // normally 2
 const int BIOS_NAME_ADDR = BIOS_SIZE_ADDR + sizeof(uint16_t); // normally 4

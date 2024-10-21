@@ -148,7 +148,6 @@ if (RAMRead(0xFFFF) == 42) {
   Serial.println(F("Bootstrap Code loading at 0xFFC0...") );  
   
   loaderAddr = blockcopy_blks[0].start;
-  // int lcnt = 0;
   for (unsigned int j = 0; j < blockcopy_blks[0].len; ++j) {
     RAMWrite(blockcopy_blks[0].data[j],loaderAddr);
     loaderAddr++;
@@ -230,7 +229,7 @@ if (RAMRead(0xFFFF) == 42) {
     while(1);  // halt.
   }
 } else {  // its ROM...
-  Serial.println(F("\nStaging from ROM..."));
+  Serial.println(F("\nStaging From ROM"));
 
 }
 

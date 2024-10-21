@@ -70,20 +70,20 @@ CopyBlock:
                                         ; when to reset after the code is loaded
 LstByt: bne CopyBlock
 
-;;  This is a bit tricky, the byte loader sends a new byte at each read attempt
-;;  so when we are reading from the address stored in x multiple times each time
-;;  this is a new value.  See the Arduinio sketch for the specifc structure
-;;  of the stored data (TLDR - byte 1 and 2 = destination address,  byte 3 and 4 contain
-;;  the number of bytes - and the following data is the actual ROM code.)
-;;  The read attempt must be continuious and consecutive or the loader will reset.
-;;  that is, you can not do other IO routines with the AVR while reading the data (like
-;;  use the disk routines or the UART.)
-;;
-;;  keep in mind -  the destionation address is in y, the byte loader address (the AVR) 
-;;  is in x, and the byte count is stored in w.  When the code jumps to the loader this is 
-;;  a modified version of the code above this comment block from CopyBlock to LstByt almost
-;;  exactly -- with the acception that lda ,x+ has now become lda ,x by virtue of the last 
-;;  two lines before the jump.
+;; This is a bit tricky, the byte loader sends a new byte at each read 
+;; attempt so when we are reading from the address stored in x multiple 
+;; times each time this is a new value.  See the Arduino sketch for the 
+;; specific structure of the stored data (TLDR - byte 1 and 2 = destination 
+;; address,  byte 3 and 4 contain the number of bytes - and the following 
+;; data is the actual ROM code.) The read attempt must be continuous and 
+;; consecutive or the loader will reset.
+
+;; Keep in mind - the destination address is in y, the byte loader address 
+;; is in x, and the byte count is stored in w.  When the code jumps to the 
+;; loader this is a modified version of the code above this comment block 
+;; from CopyBlock to LstByt almost exactly -- with the exception that 
+;; lda ,x+ has now become lda ,x by virtue of the last two lines before the 
+;; jump.
 
 
         ldx   #loadfm                   ; set the start address to the loader
@@ -98,10 +98,13 @@ LstByt: bne CopyBlock
         sta   loader+1                  ; modify the code lda ,x+ -> lda ,x
         jmp   loader                    ; jump to self copied loader
 
-;;  from this point CPU is in free run, but after 1/4 E the AVR should reset the system
-;;  as it has counted along with the w register. From this point the 63C09 should bootstrap
-;;  the system by loading 1 byte at a time to the location set by the y register typically
-;;  to the top of memory.
+;;  63C09 will copy the data from the SD card into ram, and hopefully update
+;;  reset vectors.
+
+;;  from this point CPU is in free run, but after 1/4 E the AVR should reset
+;;  the system as it has counted along with the w register. From this point 
+;;  the 63C09 should bootstrap the system by loading 1 byte at a time to the 
+;;  location set by the y register typically to the top of memory.
 
 
 */
