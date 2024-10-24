@@ -34,6 +34,13 @@ This is the newest untested PCB Layout with the following changes:
       sd card interface exactly like the SD interface on the V20-MBC, 4.2 resolves
       this.  
 
+
+You will need to specify 4 layers, and give them layers in the following order (if ordering from PCB Way)
+  TopLayer
+  InnerLayer1
+  InnerLayer2
+  BottomLayer
+
 These are currently out for production, we should know in a week or so if they are 
 verified.  I have no reason to asume that they will not work but I have not done a 
 test run.  please order at your own risk.

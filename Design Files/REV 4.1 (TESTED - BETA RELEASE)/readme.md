@@ -31,5 +31,11 @@ but have a few simple mistakes
       sd card interface exactly like the SD interface on the V20-MBC, 4.2 resolves
       this.  
 
+You will need to specify 4 layers, and give them layers in the following order (if ordering from PCB Way)
+  TopLayer
+  InnerLayer1
+  InnerLayer2
+  BottomLayer
+
 These issues are fixed in REV 4.2, however the first production run is not back.  
 If you want a verifyed tested board this is the board that will work.
