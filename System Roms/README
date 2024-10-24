@@ -13,6 +13,12 @@ Digicool things:
 
 https://digicoolthings.com/minimalist-europe-card-bus-mecb-some-6809-basic-fun/
 
+vBIOS Settings for this rom
+
+FILE BIOS.BIN
+SIZE 4000
+START C000
+
 
 Required to build these: 
 
@@ -20,3 +26,4 @@ SRecord (srec-cat)
 asm6809
 LWTOOLS
 
+Alteritively - there is a release .zip file here you can just unzip onto the root of your sd card.

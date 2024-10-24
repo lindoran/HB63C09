@@ -3,7 +3,7 @@
 
 /*
 blockcopy.asm listing below for reference, please see the c code below the comments
- AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 1 - 10/05/2024 08:57:59 PM
+ AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 1 - 10/22/2024 11:12:01 AM
 
 
     1/   0 :                            ;; short block copy
@@ -66,7 +66,7 @@ blockcopy.asm listing below for reference, please see the c code below the comme
    58/FFC3 : 10 8E 40 00                        ldy    #loader                  ; destination of loader code - 
    59/FFC7 : 10 86 00 08                        ldw    #((LstByt+2)-CopyBlock)  ; number of bytes into W 
    60/FFCB :                            
- AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 2 - 10/05/2024 08:57:59 PM
+ AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 2 - 10/22/2024 11:12:01 AM
 
 
    61/FFCB :                            ;;  we need to relocate the loader to the static block so we can load the rom space.
@@ -113,7 +113,7 @@ blockcopy.asm listing below for reference, please see the c code below the comme
   102/FFEE :                            
   103/FFEE :                            
   104/FFEE :                            
- AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 3 - 10/05/2024 08:57:59 PM
+ AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 3 - 10/22/2024 11:12:01 AM
 
 
   Symbol Table (* = unused):
@@ -121,7 +121,7 @@ blockcopy.asm listing below for reference, please see the c code below the comme
 
 *ARCHITECTURE :                                      "x86_64-unknown-linux" - |
 *CASESENSITIVE :                  0 - | *CONSTPI :     3.141592653589793239 - |
- COPYBLOCK :                   FFCB C | *DATE :                "10/05/2024" - |
+ COPYBLOCK :                   FFCB C | *DATE :                "10/22/2024" - |
 *FALSE :                          0 - | *FLOATMAX :   1.18973149535725E4932 - |
 *HAS64 :                          1 - | *LISTON :                         1 - |
  LOADER :                      4000 - |  LOADFM :                      A03E - |
@@ -129,13 +129,13 @@ blockcopy.asm listing below for reference, please see the c code below the comme
 *MACEXP :                         7 - | *MOMCPU :                      6309 - |
 *MOMCPUNAME :                "6309" - | *NESTMAX :                      100 - |
 *PADDING :                        0 - | *PLAINBASE :                      0 - |
-*RELAXED :                        0 - | *TIME :               "08:57:59 PM" - |
+*RELAXED :                        0 - | *TIME :               "11:12:01 AM" - |
 *TRUE :                           1 - | *VERSION :                     142F - |
 
      23 symbols
      18 unused symbols
 
- AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 4 - 10/05/2024 08:57:59 PM
+ AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 4 - 10/22/2024 11:12:01 AM
 
 
   Code Pages:
