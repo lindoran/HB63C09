@@ -37,5 +37,7 @@ You will need to specify 4 layers, and give them layers in the following order (
   InnerLayer2
   BottomLayer
 
-These issues are fixed in REV 4.2, however the first production run is not back.  
-If you want a verifyed tested board this is the board that will work.
+The 4.2 Build files have been fully tested and shown to work - new builds should use these files.
+
+An updated build guide is here : https://hackaday.io/project/193108/instructions?page=1
+an older one can also be found in the programmers refrence in the documents folder of this repo

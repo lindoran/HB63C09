@@ -86,6 +86,8 @@ URL's subject to change, inaccuracy and fluxuating prices please do your own res
       https://www.ebay.com/itm/226245863722
       https://www.aliexpress.us/item/3256806685302032.html
 
+An updated build guide is here : https://hackaday.io/project/193108/instructions?page=1
+an older one can also be found in the programmers refrence in the documents folder of this repo
 
 Untested 6809E Adapter:
 
