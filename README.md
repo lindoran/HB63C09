@@ -18,8 +18,7 @@ what is currently needed is help developing ports to flex, Nitros09, Cubix and m
 
 you can find a significantly updated Programmers reference in the documents folder, if interested.
 
-If you would like to build your own (im thrilled!) keep in mind rev 4.1 is tested, and working.  4.2 SHOULD work but is still out to production.  If you do choose to build a 4.2 board, keep in mind I am still waiting on those boards to come back from production.
-
+4.2 Is the most recent version of the PCB and is verified to work.
 
 You can find more details at: 
 https://hackaday.io/project/193108-hb63c09m-mini-itx-63c09-form-factor-computer
