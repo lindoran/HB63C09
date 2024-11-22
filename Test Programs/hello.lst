@@ -1,0 +1,42 @@
+     A000             (        hello.asm):00001         USTAT     EQU $A000            ; UART status register address
+     A001             (        hello.asm):00002         UDATA     EQU $A001            ; UART data register address
+     A03E             (        hello.asm):00003         LOADER    EQU $A03E            ; Loader register
+     00FF             (        hello.asm):00004         ULOCK     EQU 255              ; UNLOCK code for the loader register
+     0001             (        hello.asm):00005         RESET     EQU 1                ; reset code for loader, causes a cpu reset (*not an avr reset*)
+                      (        hello.asm):00006         
+                      (        hello.asm):00007         
+                      (        hello.asm):00008                   ORG $1000
+1000 8E1026           (        hello.asm):00009         START     LDX #MESSAGE         ; Point X to the start of the message
+1003 A680             (        hello.asm):00010         LOOP      LDA ,X+              ; Load the next character
+1005 2708             (        hello.asm):00011                   BEQ DONE             ; If null terminator, exit loop
+1007 BD101A           (        hello.asm):00012                   JSR WAITACIA         ; Wait for UART to be ready
+100A B7A001           (        hello.asm):00013                   STA UDATA            ; Send the character to the UART
+100D 20F4             (        hello.asm):00014                   BRA LOOP             ; Repeat for the next character
+100F                  (        hello.asm):00015         DONE      
+100F 8EA03E           (        hello.asm):00016                   LDX #LOADER          ; we will reset the monitor with the loader
+1012 86FF             (        hello.asm):00017                   LDA #ULOCK           ; unlock the loader (magic number)
+1014 A784             (        hello.asm):00018                   STA ,X               ; send the unlock command
+1016 8601             (        hello.asm):00019                   LDA #RESET           ; reset code (see arduino sketch LOADERR)
+1018 A784             (        hello.asm):00020                   STA ,X               ; reset the CPU, this should take us back to the monitor.
+                      (        hello.asm):00021         
+                      (        hello.asm):00022         
+101A 3402             (        hello.asm):00023         WAITACIA  PSHS A               ; Push accumulator A onto the stack to save its value
+101C B6A000           (        hello.asm):00024         WRWAIT    LDA  USTAT           ; Load the UART status register into accumulator A
+101F 8502             (        hello.asm):00025                   BITA #2              ; Test bit 1 (mask 0x02) of the UART status register
+1021 27F9             (        hello.asm):00026                   BEQ  WRWAIT          ; If bit 1 is clear, loop back to WRWAIT (UART not ready)
+1023 3502             (        hello.asm):00027                   PULS A               ; Pop the original value of accumulator A from the stack
+1025 39               (        hello.asm):00028                   RTS                  ; Return from subroutine
+                      (        hello.asm):00029         
+                      (        hello.asm):00030         
+1026 0A               (        hello.asm):00031         MESSAGE   FCB 10
+1027 0D               (        hello.asm):00032                   FCB 13
+1028 0A               (        hello.asm):00033                   FCB 10
+1029 0D               (        hello.asm):00034                   FCB 13
+102A 48656C6C6F2C2057 (        hello.asm):00035                   FCC "Hello, World!"  ; The message string
+     6F726C6421
+1037 0A               (        hello.asm):00036                   FCB 10
+1038 0D               (        hello.asm):00037                   FCB 13
+1039 0A               (        hello.asm):00038                   FCB 10
+103A 0D               (        hello.asm):00039                   FCB 13
+103B 00               (        hello.asm):00040                   FCB $00              ; Null terminator
+                      (        hello.asm):00041                   END START
