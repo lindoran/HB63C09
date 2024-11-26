@@ -22,6 +22,8 @@
                       ;         THE CHIP FOR THIS TO WORK.    
                       ;       - BELOW IS THE LEAD IN FROM GREG'S SOURCE (DigiCoolThings) From his repo: 
                       ;         https://github.com/DigicoolThings/MECB
+                      ;       
+                      ;        z80dad@gmail.com        MAR, 2024
                       
                       ;Based on Grant Searle's published AS9 compatible Assembler source code.
                       ;       Refer: http://searle.x10host.com/6809/Simple6809.html
@@ -40,7 +42,7 @@
                       ;
                       ;  
                       ;
-                      ;       z80dad@gmail.com        MAR, 2024
+                      
                       
 0000                            SETDP $00              ; Tell asm6809 Assembler Direct Page is det for Zero Page.
                       
@@ -54,7 +56,7 @@ E44C                  MON09_CHKCHR    EQU     $E44C
 E46D                  MON09_DISASS    EQU     $E46D
 E476                  MON09_DISREG    EQU     $E476
 E467                  MON09_DLOAD     EQU     $E467
-FDC4                  MON09_FIRQADR   EQU     $FDC4
+FD59                  MON09_FIRQADR   EQU     $FD59
 E446                  MON09_GETADR    EQU     $E446
 E443                  MON09_GETBYT    EQU     $E443
 E43A                  MON09_GETCHR    EQU     $E43A
@@ -63,20 +65,19 @@ E440                  MON09_GETNIB    EQU     $E440
 E449                  MON09_GETRNG    EQU     $E449
 E45B                  MON09_HEXOUT    EQU     $E45B
 E458                  MON09_HOUT      EQU     $E458
-FDD0                  MON09_ILOPADR   EQU     $FDD0
-FDC8                  MON09_IRQADR    EQU     $FDC8
+FD61                  MON09_ILOPADR   EQU     $FD61
+FD5D                  MON09_IRQADR    EQU     $FD5D
 E455                  MON09_LFCR      EQU     $E455
 E46A                  MON09_LOAD      EQU     $E46A
 E479                  MON09_MONITOR   EQU     $E479
-FDCC                  MON09_NMIADR    EQU     $FDCC
 E44F                  MON09_PUTCHR    EQU     $E44F
 E47C                  MON09_RESET     EQU     $E47C
 E452                  MON09_SPACE     EQU     $E452
 E473                  MON09_STEPDI    EQU     $E473
 E470                  MON09_STEP      EQU     $E470
-FDBC                  MON09_SWI2ADR   EQU     $FDBC
-FDC0                  MON09_SWI3ADR   EQU     $FDC0
-FDB8                  MON09_SWIADR    EQU     $FDB8
+FD51                  MON09_SWI2ADR   EQU     $FD51
+FD55                  MON09_SWI3ADR   EQU     $FD55
+FD4D                  MON09_SWIADR    EQU     $FD4D
 E45E                  MON09_WRDOUT    EQU     $E45E
 E461                  MON09_WRLIN     EQU     $E461
 E464                  MON09_WRMSG     EQU     $E464

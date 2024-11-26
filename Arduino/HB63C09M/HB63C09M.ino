@@ -98,6 +98,8 @@ char     biosName[MAX_FN_LENGTH];     // this is the filename in the root of the
 uint8_t  storedChecksum;              // variables for verifying EEPROM Contents
 uint8_t  calculatedChecksum;          //  ''
 
+long int swatchMillis = 0;            // Dumb stop watch for debugging
+bool     firstReadSwatch = false;     // see if its started?
 
 const char *  fileNameSD;             // Pointer to the string with the currently used file name
 
@@ -124,8 +126,6 @@ bitSet(PORTD, IOGNT_);
 bitSet(DDRB, RES_); // seting these to outputs simply sets them low
 bitSet(DDRB, HALT_);
 bitSet(DDRD, BCLK); // set up the bank clock pin to output
-
-
 
 // 63C09 System is in tri-state
 
@@ -297,6 +297,7 @@ void loop(){
         *   0xA003    - READSECT*   - Read a sector from the disk (512 bytes in sequence) 
         *   0xA004    - SDMOUNT*    - Mount the installed volume (output error code as read value)
         *   ...
+        *   0xA03D    - SWATCH     - This is a dumb start stop timer that uses serial
         *   0xA03E    - LOADER     - This is the loader port its typically locked to the user.
         *   0xA03F    - RDBANK     - Read the last selected bank value 
         *   
@@ -528,7 +529,8 @@ void loop(){
               }
               ioByteCnt++;                          // Increment the counter of the exchanged data bytes
               break;
-
+              
+            
              case 0x3E:
               // LOADERR --
               /*
@@ -746,6 +748,24 @@ void loop(){
                busData = mountSD(&filesysSD);
                break;  
 
+              case 0x3D:
+                // SWATCH
+                // first read will output a "start" on the uart and save the start time from millis()
+                // second read will output the number of millis that have passed. and clear the firstread state
+                // this will not use ioByteCnt and presists through a 68C09 reset. meant for debugging
+
+                if(!firstReadSwatch) {
+                  swatchMillis = millis();
+                  firstReadSwatch = true;
+                  Serial.println(F("start"));
+                }
+                else {
+                  long int passed = millis() - swatchMillis;
+                  Serial.println(passed);
+                  firstReadSwatch = false;
+                }
+              break;
+                
               case 0x3E:
                 // LOADER
                 // This will load the system in a "ROMLESS" memory configuration 
@@ -828,6 +848,7 @@ void loop(){
      
 
 } // end - on to next loop
+
 
 // tri-state the bus
 void busTstate(void) {
