@@ -20,6 +20,11 @@ you can find a significantly updated Programmers reference in the documents fold
 
 4.2 Is the most recent version of the PCB and is verified to work.
 
+NOTICE: the AHC logic bom has been found to cause issues I have rolled back to the mouser HC bom.  Please use this moving forward.
+issues were found specifically relating to propigation delay of the chipset, in combination with the 74AHC254, which would occasionally cause 
+the ram to miss writes -- especially when the 63C09 was runing in native mode, or when atempting to write the ram from the microcontroller.
+switching to the HC chips resolves this issue. 
+
 You can find more details at: 
 https://hackaday.io/project/193108-hb63c09m-mini-itx-63c09-form-factor-computer
 -and- 
