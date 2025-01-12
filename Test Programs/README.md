@@ -1,6 +1,10 @@
 # TEST PROGRAMS
 
 These Files are test programs for loading with srec (s19) or iHex (hex) into a serial monitor for testing
+<pre>
+BBCBROT.BAS -   a simple color ascii mandelbrot plot for BBC Basic.
+</pre>
+
 
 <pre>
 hello.asm   -   simple hello world program, you can compile it with:  

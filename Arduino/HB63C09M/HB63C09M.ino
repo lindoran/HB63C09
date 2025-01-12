@@ -97,6 +97,10 @@ uint16_t biosSize;                    // this is the size to load to memory befo
 char     biosName[MAX_FN_LENGTH];     // this is the filename in the root of the sd card to load.
 uint8_t  storedChecksum;              // variables for verifying EEPROM Contents
 uint8_t  calculatedChecksum;          //  ''
+uint8_t  ustatus = 0;                 // this is the current 6850 Wrapper status register for the current poling cycle.
+uint8_t  rxIntEn = 0;                 // enable interupts on RDRF
+uint8_t  txIntEn = 0;                 // enable interupts on TDRE
+uint8_t  intRegister = 0;             // this register contains the status of interupt generation;
 
 long int swatchMillis = 0;            // Dumb stop watch for debugging
 bool     firstReadSwatch = false;     // see if its started?
@@ -266,6 +270,34 @@ bitClear(DDRB, HALT_);
 // Main loop
 
 void loop(){
+  
+  // set UARTSTAT Register.
+  ustatus = 0;  // clear status register 
+  
+  //RDRF 
+  if (Serial.available() > 0) {
+    bitSet(ustatus, 0);
+    // set an interupt if the recieve data register has data and interupts are enabled
+    if(rxIntEn) {
+      bitSet(intRegister, 0); // (interupt is from RDRF)
+    }
+    else bitClear(intRegister,0);
+  }
+
+  //TDRE
+  if (Serial.availableForWrite() > 0) {
+      bitSet(ustatus, 1);
+      // set an interupt if the Transmit data register has space and can send data
+      if(txIntEn) {
+        bitSet(intRegister, 1); // (interupt is from TRDE) 
+      }
+      else bitClear(intRegister,1);
+  }
+
+  //interupt handler 
+  if (intRegister == 0) bitClear(DDRB, IRQ_); // if int Register is clear then clear the interupt
+  else bitSet(DDRB, IRQ_); // set the interupt.
+  
   // checking for IOREQ_
   if (!(bitRead(PIND, IOREQ_))) { 
       if (!(bitRead(PIND, XSIN_))) {
@@ -280,7 +312,7 @@ void loop(){
         *-------------------- 
         *
         *  WRITE OPERATIONS: 
-        *   0xA000    - NULL       - Legacy 6850 UART Control register. May use later (future use)
+        *   0xA000    - UARTCNT    - Legacy 6850 UART Control register.
         *   0xA001    - TXSERIAL   - 6850 Wrapper: Send a byte to TX Buffer (default buffer size is 64bytes)
         *   0xA002    - SELDISK*   - Select Disk Number ie: 0..99
         *   0xA003    - SELTRACK*  - Select Disk Track  ie: 0..511 (two bytes in sequence)
@@ -311,11 +343,10 @@ void loop(){
            
            switch (curOp & ADDRESS_MASK) { // address nibble
              case 0x00:
-               // NULL
-               //This is normally the UART control register for the 6850, since it is internally
-               //configured in the AVR we don't need to store this information. but we need to 
-               //leave this for legacy support of older code. 
-            
+              // store the control req register bits for use by the wrapper   
+              txIntEn = (busData & 0x20) && !(busData & 0x40); // CR5 = 1 and CR6 = 0
+              rxIntEn = (busData & 0x80);                      // CR7 = 1
+
               break;
              
              case 0x01:
@@ -323,6 +354,7 @@ void loop(){
               // TX SERIAL 
               
               Serial.write(busData);
+              bitClear(intRegister, 1);
 
               break;
               
@@ -619,9 +651,11 @@ void loop(){
                // /DCD, /CTS and FE are depreciated.
 
                // TODO - write code for bits 5 and 7 which will interupt the CPU if the buffer has under/over run
+
+               busData = ustatus;  // output the current status of the register to the bus
                
-               if (Serial.available() > 0) bitSet(busData, 0);
-               if (Serial.availableForWrite() > 0) bitSet(busData, 1);
+               // if (Serial.available() > 0) bitSet(busData, 0);
+               // if (Serial.availableForWrite() > 0) bitSet(busData, 1);
               
                break; // end of read uart control register
               
@@ -631,7 +665,8 @@ void loop(){
                //the uart to the bus.
 
                busData = Serial.read();
-                 // TODO: -- Needs to 
+               bitClear(intRegister, 0); // clear the interupt register at the start of the next cycle 
+               
                break; // end of read uart 
               
               case 0x02:
@@ -838,6 +873,7 @@ void loop(){
                // should never jump here, this can never be true.
             } // endcase read
             busWrite(busData);  // data is on the bus
+            
        } // inner else read
        lastOp = curOp;
        busIO();  // end the current Io Request as data is ready to be read or written;
@@ -845,7 +881,7 @@ void loop(){
       
   
      } // io request
-     
+    
 
 } // end - on to next loop
 
