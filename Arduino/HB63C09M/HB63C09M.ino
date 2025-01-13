@@ -280,6 +280,7 @@ void loop(){
     // set an interupt if the recieve data register has data and interupts are enabled
     if(rxIntEn) {
       bitSet(intRegister, 0); // (interupt is from RDRF)
+      bitSet(ustatus,7); // status interupt bit
     }
     else bitClear(intRegister,0);
   }
@@ -289,7 +290,8 @@ void loop(){
       bitSet(ustatus, 1);
       // set an interupt if the Transmit data register has space and can send data
       if(txIntEn) {
-        bitSet(intRegister, 1); // (interupt is from TRDE) 
+        bitSet(intRegister, 1); // (interupt is from TRDE)
+        bitSet(ustatus,7); // status interupt bit. 
       }
       else bitClear(intRegister,1);
   }
