@@ -37,6 +37,15 @@ inspiring designs for without which none of this would be possibe.
 Thank you to PCBWay.Com for sponsoring the physical prototypes which were used
 to develop this system see their website at http://pcbway.com
 
+WARNING!!! 
+-- Falure to care for open collector (ie non-push pull) on this board can cause damage!
+   Take care, and verify on the schematics when driving a line high, you can cause a 
+   short with just software.
+
+   Most of the signals are only ever driven low by setting an input to an output.
+   make sure you understand how the board works before modifying the code, which
+   you do at your own risk!
+
 */
 
 #include "const.h"  // many constants are defined here.
@@ -49,9 +58,12 @@ to develop this system see their website at http://pcbway.com
 
 
 //RAM Write accsess time - best to not mess with this
-//at 20Mhz a single bit flip is 50ns at 16 it is a bit closer to 60, by introducing this short delay
+//at 20Mhz a single bit flip is 50ns at 16Mhz it is a bit closer to 60, by introducing this short delay
 //we asure the ram chip has time to respond (min accsess time of our RAM is 55ns) regardless of clock
 //speed.
+
+#define F_CPU 20000000UL // may not be needed but we need to be sure board is 20Mhz
+
 #define DO_TWICE_NOP() \
 do { \
     __asm__ __volatile__ ("nop\n\t"); \
@@ -100,16 +112,22 @@ uint8_t  calculatedChecksum;          //  ''
 uint8_t  ustatus = 0;                 // this is the current 6850 Wrapper status register for the current poling cycle.
 uint8_t  rxIntEn = 0;                 // enable interupts on RDRF
 uint8_t  txIntEn = 0;                 // enable interupts on TDRE
-uint8_t  intRegister = 0;             // this register contains the status of interupt generation;
+uint8_t  tmIntEn = 0;                 // enable timer interupts
+uint32_t curTime = 0;                 // last known time.
+uint32_t timerThreshold = 0;          // max value is default.
+uint8_t  tStatus = 0;                 // timer Status Register
+uint8_t  tControl = 0;                // Timer Control register.
+uint8_t  intRegister = 0;             // this register contains the status of interupt generation, this is used only by the interupt handler
 
-long int swatchMillis = 0;            // Dumb stop watch for debugging
-bool     firstReadSwatch = false;     // see if its started?
+volatile uint16_t timerCounts;
+uint8_t prescalerBits = 0;
 
 const char *  fileNameSD;             // Pointer to the string with the currently used file name
 
 FATFS    filesysSD;                   // Filesystem object (PetitFS library)
 uint8_t  bufferSD[32];                // I/O buffer for SD disk operations (store a "segment" of a SD sector).
-char  diskName[MAX_FN_LENGTH] = M6X09DISK;    // String used for virtual disk file name -- always selects disk zero after staging in the current directory
+char  diskName[MAX_FN_LENGTH] 
+       = M6X09DISK;                   // String used for virtual disk file name -- always selects disk zero after staging in the current directory
 uint16_t trackSel;                    // Store the current track number [0..511]
 uint8_t  sectSel;                     // Store the current sector number [0..31]
 uint8_t  diskErr = 19;                // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
@@ -118,7 +136,7 @@ uint8_t  numWriBytes;                 // Number of written bytes after a writeSD
 uint8_t  diskSet = 0;                 // Current "Disk Set"  -- since subdirectories all disk sets are 0, each system rom will have it's own disk sets.
 
 // constants
-const byte    maxDiskNum   = 99;          // Max number of virtual disks
+const byte maxDiskNum = 99;           // Max number of virtual disks
 
 
 void setup() {
@@ -266,6 +284,22 @@ bitClear(DDRB, HALT_);
 
 }
 
+// Timer Interupt generation
+ISR(TIMER1_OVF_vect) {
+    // set registers
+    if (tmIntEn) {
+      bitSet(intRegister, 2);  // Set the timer interrupt bit, set limit reached
+      bitSet(tStatus, 7);      // Set the timer status interrupt bit
+      
+    } else {
+      bitClear(intRegister, 2); // no interupts make sure it is clear
+    }
+    
+    intHandler();               // Handle the interupt generation for the 63C09
+    
+    // Reload the timer for the next interrupt
+    TCNT1 = 65536 - timerCounts;
+}
 
 // Main loop
 
@@ -273,6 +307,11 @@ void loop(){
   
   // set UARTSTAT Register.
   ustatus = 0;  // clear status register 
+
+  // serial interupts, the AVR has 64 byte fifo buffer, making the buffering transparent 
+  // when the user uses it in 6850 wrapper mode. for most use cases, these buffers are 
+  // large enough to operate without flow control when using fully interupt controlled 
+  // circular buffers of large enough size. such as defined in Dominic's BBC Basic port.
   
   //RDRF 
   if (Serial.available() > 0) {
@@ -297,8 +336,7 @@ void loop(){
   }
 
   //interupt handler 
-  if (intRegister == 0) bitClear(DDRB, IRQ_); // if int Register is clear then clear the interupt
-  else bitSet(DDRB, IRQ_); // set the interupt.
+  intHandler();  // checks to see if the intRegister is clear '0' and if so clears the interupt.
   
   // checking for IOREQ_
   if (!(bitRead(PIND, IOREQ_))) { 
@@ -321,6 +359,9 @@ void loop(){
         *   0xA004    - SELSECT*   - Select Disk Sector ie: 0..31  
         *   0xA005    - WRITESECT* - Write a Sector to the Disk (512 bytes in sequence) 
         *   ...
+        *   0xA03B    - TIMRCNT    - Timer Control Register
+        *   0xA03C    - SETTMSB    - Most Significant byte set point for timer.
+        *   0xA03D    - SETTLSB    - Least Significant byte set point for timer. 
         *   0xA03E    - LOADERR    - This is the loader register, it is unlocked by writing 255 after boot up.
         *   0xA03F    - SETBANK    - Write the low nibble (3 bits) on the data bus to the bank register
         *  
@@ -328,10 +369,12 @@ void loop(){
         *   0xA000    - UARTSTAT   - 6850 Wrapper: Send data back as if it were a 6850 Status regeister.(SEE ACCEPTIONS IN CASE)
         *   0xA001    - RXSERIAL   - 6850 Wrapper: Read a byte from the RX buffer (defalut buffer size is 64bytes)
         *   0xA002    - ERRDISK*   - Read out the last disk error
-        *   0xA003    - READSECT*   - Read a sector from the disk (512 bytes in sequence) 
-        *   0xA004    - SDMOUNT*    - Mount the installed volume (output error code as read value)
+        *   0xA003    - READSECT*  - Read a sector from the disk (512 bytes in sequence) 
+        *   0xA004    - SDMOUNT*   - Mount the installed volume (output error code as read value)
         *   ...
-        *   0xA03D    - SWATCH     - This is a dumb start stop timer that uses serial
+        *   0xA03B    - TIMRSTA    - Timer Status Register
+        *   0xA03C    - RTIMRMS    - Read Timer Most Significant Byte.
+        *   0xA03D    - RTIMRLS    - Read Tiemr Least Significant Byte.    
         *   0xA03E    - LOADER     - This is the loader port its typically locked to the user.
         *   0xA03F    - RDBANK     - Read the last selected bank value 
         *   
@@ -357,6 +400,7 @@ void loop(){
               
               Serial.write(busData);
               bitClear(intRegister, 1);
+              intHandler();
 
               break;
               
@@ -563,8 +607,95 @@ void loop(){
               }
               ioByteCnt++;                          // Increment the counter of the exchanged data bytes
               break;
+             
+             case 0x3B:  
+             /* TIMRCNT --  
+              * TIMER CONTROL REGISTER (TCR):  
+              * Controls the timer operation, including starting, stopping, resetting, and enabling interrupts.  
+              *  
+              *               I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0  
+              *                          ---------------------------------------------------------  
+              *                            0  X  X  X  X  X  X  X    Timer interrupts disabled  
+              *                            1  X  X  X  X  X  X  X    Timer interrupts enabled  
+              *  
+              *                                       ...            D6 - D2 are future use, write 0's  
+              *  
+              *                            X  X  X  X  X  X  0  X    Timer not reset  
+              *                            X  X  X  X  X  X  1  X    Timer reset to 0 (Auto-clear)  
+              *                            X  X  X  X  X  X  X  0    Timer stopped (Interrupts disabled, final value retained)  
+              *                            X  X  X  X  X  X  X  1    Timer started  
+              *  
+              * DESCRIPTION:  
+              * - Bit 0: Controls the timer. Setting to 1 starts the timer, clearing it stops the timer and disables interrupts.  
+              * - Bit 1: Resets the timer when set. This bit clears itself automatically after execution.  
+              * - Bit 7: Enables (1) or disables (0) timer-generated interrupts.  
+              *  
+              * NOTES:  
+              * - The timer must be started (Bit 0 = 1) for interrupts to occur if enabled (Bit 7 = 1).  
+              * - Reserved bits (D6-D2) must always be written as 0 for future compatibility.  
+              * 
+              */
+
+              // Set the control register to the bus data
+              tControl = busData;
+
+              // Stop timer if running
+              if (!bitRead(tControl, 0) && bitRead(tStatus, 0)) {
+                Timer1_Stop();
+                curTime = TCNT1;
+                tmIntEn = 0; // Disable interrupts
+                bitClear(tStatus, 0);  // Clear timer running flag
+              }
+
+               // Start timer if not already running
+              if (bitRead(tControl, 0) && !bitRead(tStatus, 0)) {
+                Timer1_Start();
+                bitSet(tStatus, 0);  // set timer is running
+              }
+
+              // Reset timer if requested, while running. while stopped, its not super useful. 
+              if (bitRead(tControl, 1)) {
+                Timer1_Start();
+                bitClear(tControl, 1);
+                bitSet(tStatus, 0);
+              }
               
-            
+              // Enable or disable timer interrupts
+              tmIntEn = bitRead(tControl, 7);
+
+              
+
+
+             break;
+             
+             case 0x3C:
+             // SETTMSB
+             // Set Timer MSB, however both bytes need to be written to store a value MSB first then LSB
+             // Usage: sets the Threshold for the timer rollover when timer is stopped in 1 16 bit operation
+             
+             tempByte = busData; // save for later
+             bitSet(tStatus, 1); // High Byte Set and waiting
+
+             break;
+
+             case 0x3D:
+             // SETTLSB
+             // Set the LSB based on whether the MSB was already written. 
+             // If the MSB was written, both MSB and LSB are combined to form a 16-bit value.
+             // If only the LSB is written, the timer threshold is updated with the LSB only.
+             
+             if (bitRead(tStatus, 1) && !bitRead(tStatus,0)) { 
+               timerThreshold = tempByte << 8; // set MSB
+               timerThreshold |= busData; // set LSB 
+               bitClear(tStatus,1); // operation complete
+             } 
+             else if (!bitRead(tStatus,0)) {
+              timerThreshold = busData; // set LSB
+             }
+             Timer1_Init(timerThreshold, false);  // init the timer but do not start
+
+             break;
+             
              case 0x3E:
               // LOADERR --
               /*
@@ -629,8 +760,11 @@ void loop(){
              default:
               break;
               // should never jump to here - this can never be true.
+         
           } // endcase write 
+      
        } // endif write  
+       
        // bus read
        else {
             busData = 0;  // flush busdata from last operation 
@@ -646,16 +780,16 @@ void loop(){
                // bit 4 = depricaited
                // bit 5 = buffer over/underrun - not yet implimented 
                // bit 6 = depricated 
-               // bit 7 = irq  - not yet implimented
+               // bit 7 = irq
                
-               // buffers are manually set to 128bytes, testing has shown that there is little chance of an underun / overflow 
-               // set at this level. since hardware flow control is not used, the other status bits are not set.  
-               // /DCD, /CTS and FE are depreciated.
+               // buffers are manually set to 64 bytes, testing has shown that there is little chance of an underun / overflow 
+               // set at this level. /DCD, /CTS and FE are depreciated.
 
-               // TODO - write code for bits 5 and 7 which will interupt the CPU if the buffer has under/over run
+               // TODO - write code for bits 5 
 
                busData = ustatus;  // output the current status of the register to the bus
-               
+
+               // this bit update real time -- replaced by interupt controller code at top
                // if (Serial.available() > 0) bitSet(busData, 0);
                // if (Serial.availableForWrite() > 0) bitSet(busData, 1);
               
@@ -667,7 +801,8 @@ void loop(){
                //the uart to the bus.
 
                busData = Serial.read();
-               bitClear(intRegister, 0); // clear the interupt register at the start of the next cycle 
+               bitClear(intRegister, 0); // clear the interupt bit
+               intHandler();
                
                break; // end of read uart 
               
@@ -785,22 +920,69 @@ void loop(){
                busData = mountSD(&filesysSD);
                break;  
 
-              case 0x3D:
-                // SWATCH
-                // first read will output a "start" on the uart and save the start time from millis()
-                // second read will output the number of millis that have passed. and clear the firstread state
-                // this will not use ioByteCnt and presists through a 68C09 reset. meant for debugging
+              case 0x3B:
+               /* TIMRSTA
+                * TIMER STATUS REGISTER (TSR):  
+                * Shows the timer operation, for interupts, reads / writes and run status  
+                *  
+                *               I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0  
+                *                          ---------------------------------------------------------  
+                *                            0  X  X  X  X  X  X  X    Timer interrupt cleared  
+                *                            1  X  X  X  X  X  X  X    Timer interrupt enabled  
+                *  
+                *                                       ...            D6 - D3 are future use  
+                *  
+                *                            X  X  X  X  X  0  X  X    16 Bit Read Not in progress
+                *                            X  X  X  X  X  1  X  X    16 Bit Read in progress
+                *                            X  X  X  X  X  X  0  X    16 Bit Write High Byte Not Set 
+                *                            X  X  X  X  X  X  1  X    16 Bit Write High Byte Set
+                *                            X  X  X  X  X  X  X  0    Timer is stoped   
+                *                            X  X  X  X  X  X  X  1    Timer is running  
+                *  
+                * DESCRIPTION:  
+                * - Bit 0: shows when timer is running 
+                * - Bit 1: shows when the high byte is set (1) or not set (0) for the limit
+                * - Bit 2: shows if a 16 bit Read is in progress (1) or not (0) of the timer.
+                * - Bit 7: Interrupt status for timer-generated interrupts (1 for interrupt, 0 for no interrupt).  
+                *  
+                * NOTES:  
+                * - The timer must be started (Bit 0 = 1) for interrupts to occur if enabled (Bit 7 = 1 on
+                *   control register).  
+                *  
+                * 
+                */
+              
+                busData = tStatus;
+                bitClear(tStatus, 7); // clear interupt status bit, when checked
+                bitClear(intRegister, 2); // clear the interupt
+                intHandler();
 
-                if(!firstReadSwatch) {
-                  swatchMillis = millis();
-                  firstReadSwatch = true;
-                  Serial.println(F("start"));
-                }
-                else {
-                  long int passed = millis() - swatchMillis;
-                  Serial.println(passed);
-                  firstReadSwatch = false;
-                }
+              break;
+              
+              case 0x3C:
+               // RTIMRMS - Read Timer Most Significant Byte. 
+               // Determines when the timer is sampled, based on whether the timer is running or stopped.
+               // If the timer is running, get the most up-to-date time.
+              if (bitRead(tControl, 0))   // Timer is running
+               curTime = TCNT1;
+                
+              busData = curTime >> 8;  // Get the MSB
+              bitSet(tStatus, 2); // 16-bit read operation is in progress
+
+              break;
+
+              
+              case 0x3D:
+               // RTIMRLS - Read Timer Least Significant Byte.
+               // If the timer is running and no 16-bit read has occurred, sample the timer.
+               // If the high byte has already been read, just use the current value for the LSB.
+             
+               if (bitRead(tControl, 0) && !bitRead(tStatus, 2)) 
+                curTime = TCNT1;
+                
+               busData = curTime & 0xFF; // get the LSB
+               bitClear(tStatus, 2); 
+               
               break;
                 
               case 0x3E:
@@ -887,7 +1069,67 @@ void loop(){
 
 } // end - on to next loop
 
+// init timer routine 
 
+void Timer1_Init(uint32_t tLimit, bool enable) {
+    uint32_t timerTick;
+    uint16_t prescalerValue = 0;
+
+    // Array of possible prescalers and their corresponding bits in TCCR1B
+    uint16_t prescalers[] = {1, 8, 64, 256, 1024};
+    uint8_t prescalerBitsArray[] = {0x01, 0x02, 0x03, 0x04, 0x05};
+
+    // Find suitable prescaler
+    for(uint8_t i = 0; i < 5; i++) {
+        timerTick = F_CPU / prescalers[i];
+        timerCounts = (timerTick * tLimit) / 1000;
+
+        if(timerCounts <= 65535) {
+            prescalerValue = prescalers[i];
+            prescalerBits = prescalerBitsArray[i];
+            break;
+        }
+    }
+
+    if(prescalerValue == 0) {
+        // tLimit is too large even with the highest prescaler
+        // Handle error accordingly
+    }
+
+    // Set Timer1 count for the calculated delay
+    TCNT1 = 65536 - timerCounts;
+
+    // Configure Timer1 Control Registers
+    TCCR1A = 0x00;            // Normal mode
+    TIMSK |= (1 << TOIE1);    // Enable Timer1 overflow interrupt
+
+    if(enable) {
+        TCCR1B = prescalerBits;   // Start the timer
+    } else {
+        TCCR1B = 0x00;            // Stop the timer
+    }
+
+    sei(); // Enable global interrupts
+}
+
+// generic start routine 
+void Timer1_Start() {
+    TCNT1 = 65536 - timerCounts; // Reset timer count
+    TCCR1B = prescalerBits;      // Start the timer
+}
+
+// generic stop routine 
+void Timer1_Stop() {
+    TCCR1B = 0x00;               // Stop the timer
+}
+
+
+// handle interupts
+void intHandler(void) {
+  if (intRegister == 0) bitClear(DDRB, IRQ_); // if int Register is clear then clear the interupt
+  else bitSet(DDRB, IRQ_); // else set the interupt.
+  
+}
 // tri-state the bus
 void busTstate(void) {
     DDRA = 0x00;            // input
@@ -982,7 +1224,7 @@ void updateEEPROM(void) {
     for (int i = 0; i < MAX_FN_LENGTH; i++) {
         EEPROM.write(BIOS_NAME_ADDR + i, 0);
     }
-    for (int i = 0; i < strlen(biosName); i++) {
+    for (int i = 0; i < strlen(biosName); i++) {               
         EEPROM.write(BIOS_NAME_ADDR + i, biosName[i]);
     }
     // blank space to update eeprm

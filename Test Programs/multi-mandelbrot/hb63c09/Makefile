@@ -14,4 +14,4 @@ $(OUTPUT): $(ASM)
 
 # Clean rule
 clean:
-	rm -f $(LIST) $(OUTPUT)
+	rm -f $(LIST) $(OUTPUT) a.out
