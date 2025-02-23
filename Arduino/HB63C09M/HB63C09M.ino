@@ -288,11 +288,11 @@ bitClear(DDRB, HALT_);
 ISR(TIMER1_OVF_vect) {
     // set registers
     if (tmIntEn) {
-      bitSet(intRegister, 2);  // Set the timer interrupt bit, set limit reached
-      bitSet(tStatus, 7);      // Set the timer status interrupt bit
+      bitSet(intRegister, 2); // Set the timer interrupt bit, set limit reached
+      bitSet(tStatus, 7);     // Set the timer status interrupt bit
       
     } else {
-      bitClear(intRegister, 2); // no interupts make sure it is clear
+      bitClear(intRegister, 2); // no interupts make shure it is clear
     }
     
     intHandler();               // Handle the interupt generation for the 63C09
@@ -788,10 +788,6 @@ void loop(){
                // TODO - write code for bits 5 
 
                busData = ustatus;  // output the current status of the register to the bus
-
-               // this bit update real time -- replaced by interupt controller code at top
-               // if (Serial.available() > 0) bitSet(busData, 0);
-               // if (Serial.availableForWrite() > 0) bitSet(busData, 1);
               
                break; // end of read uart control register
               
@@ -960,9 +956,11 @@ void loop(){
               break;
               
               case 0x3C:
+              
                // RTIMRMS - Read Timer Most Significant Byte. 
                // Determines when the timer is sampled, based on whether the timer is running or stopped.
                // If the timer is running, get the most up-to-date time.
+             
               if (bitRead(tControl, 0))   // Timer is running
                curTime = TCNT1;
                 
@@ -973,6 +971,7 @@ void loop(){
 
               
               case 0x3D:
+               
                // RTIMRLS - Read Timer Least Significant Byte.
                // If the timer is running and no 16-bit read has occurred, sample the timer.
                // If the high byte has already been read, just use the current value for the LSB.

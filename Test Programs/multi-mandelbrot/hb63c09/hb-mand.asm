@@ -45,8 +45,8 @@ CONFIG:
 
         LDD     #1              ; overflow value in ms                 
         STD     TBYTH           ; Set the Timer  
-        ANDCC   #$EF            ; enable interupts from IRQ line
-        LDA     #$81            ; bit 1 and 8 set in A (set interupts start timer) 
+        ANDCC   #$EF            ; enable interupts from IRQ line (6309)
+        LDA     #$81            ; bit 1 and 8 set in A (set interupts start timer on AVR) 
         STA     TCTRL           ; start timer
 
 loop:
