@@ -375,8 +375,8 @@ void loop(){
         *   0xA004    - SDMOUNT*   - Mount the installed volume (output error code as read value)
         *   ...
         *   0xA03B    - TIMRSTA    - Timer Status Register
-        *   0xA03C    - RTIMRMS    - Read Timer Most Significant Byte.
-        *   0xA03D    - RTIMRLS    - Read Tiemr Least Significant Byte.    
+        *   0xA03C    - RTIMRMS    - Sample timer while running
+        *   0xA03D    - RTIMRLS    - Read System status register  
         *   0xA03E    - LOADER     - This is the loader port its typically locked to the user.
         *   0xA03F    - RDBANK     - Read the last selected bank value 
         *   
