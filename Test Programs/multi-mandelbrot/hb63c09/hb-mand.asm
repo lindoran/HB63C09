@@ -10,14 +10,14 @@
 ;; lets enable 6309 since the CPU is required for the architecture of the computer
 h6309   EQU     1
 TCTRL   EQU     $A03B
-TBYTH   EQU     $A03C
-TBYTL   EQU     $A03D 
+TTICK   EQU     $A03C
 
 
 
 ; interupt service routine
+        ORG     $500
 
-
+OFLOW   FCB     $00,$08         ; 16 bit overflow value
 
         ORG     $1000           ; Jump to this location with G 1000 in MON09 or ASSIST9
 CONFIG:
@@ -41,12 +41,12 @@ CONFIG:
         CLR     BCDT+1          
         CLR     BCDT+2
         CLR     BCDT+3         
+        
 
-
-        LDD     #1              ; overflow value in ms                 
-        STD     TBYTH           ; Set the Timer  
+        LDA     #8              ; overflow value in ms                 
+        STA     TTICK           ; Set the Timer from LSB 
         ANDCC   #$EF            ; enable interupts from IRQ line (6309)
-        LDA     #$81            ; bit 1 and 8 set in A (set interupts start timer on AVR) 
+        LDA     #1              ; bit 1 and 8 set in A (set interupts start timer on AVR) 
         STA     TCTRL           ; start timer
 
 loop:
@@ -73,10 +73,12 @@ loop:
         LEAS    5,S             ; Deallocate stack
         
 DONE:       
-        CLRA
-        STA     TCTRL           ; Stop Timer
-        ORCC    #$10            ; disable interups IRQ line
-        LDD     TIMER+2         ; pull just the 16 bits off the bottom of the timer.
+        ;CLRA
+        ;STA     TCTRL           ; Stop Timer
+        ;ORCC    #$10            ; disable interups IRQ line                     
+        LDD     TIMER+2          ; pull just the 16 bits off the bottom of the timer.  
+        ;MULD    #8              ; multiply by the value at OFLOW
+        ;EXG     D,W             ; we need the bottom 16 bits ie bcd in d
         BSR     BN2BCD          ; break out BCD to Q
         STQ     BCDT            ; save temp for testing
         LDX     #BCDT           ; index for BCD Printer
@@ -96,15 +98,28 @@ DONE:
 
 ;; timer interupt service routine 
 ISR:
-        LDA     TCTRL           ; clear the interupt 
-        LDQ     TIMER           ; Load the timer
-        INCW                    ; Begin 32bit inc.
-        BNE     L2              
-        INCD                    
-L2      EQU     *
+        ;; end early if we need to to save so many cycles!!
+        ;; we are going to do very small incriments
+        LDA     TCTRL           ; clear the interupt
+        INC     TIMER+3         ; start incriments to a 32bit Big endian number
+        BNE L2
+        INC     TIMER+2
+        BNE L2  
+        INC     TIMER+1
+        BNE L2
+        INC     TIMER
+L2      RTI
 
-        STQ     TIMER           ; place the timer back in memory
-        RTI                     ; Return from interupt
+;        LDA     TCTRL           ; clear the interupt 
+;        LDQ     TIMER           ; Load the timer
+;        INCW                    ; Begin 32bit inc.
+;        BNE     L2              
+;        INCD                    
+;L2      EQU     *
+;
+;        STQ     TIMER           ; place the timer back in memory
+;        RTI                     ; Return from interupt
+
 
 TIMER   FCB 0,0,0,0             ; 32bit Timer
 BCDT:   FCB 0,0,0,0,255         ; Binary coded decimal output

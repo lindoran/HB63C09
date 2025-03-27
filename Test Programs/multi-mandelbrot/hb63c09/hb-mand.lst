@@ -10,14 +10,14 @@
                       (      hb-mand.asm):00010         ;; lets enable 6309 since the CPU is required for the architecture of the computer
      0001             (      hb-mand.asm):00011         h6309   EQU     1
      A03B             (      hb-mand.asm):00012         TCTRL   EQU     $A03B
-     A03C             (      hb-mand.asm):00013         TBYTH   EQU     $A03C
-     A03D             (      hb-mand.asm):00014         TBYTL   EQU     $A03D 
+     A03C             (      hb-mand.asm):00013         TTICK   EQU     $A03C
+                      (      hb-mand.asm):00014         
                       (      hb-mand.asm):00015         
                       (      hb-mand.asm):00016         
-                      (      hb-mand.asm):00017         
-                      (      hb-mand.asm):00018         ; interupt service routine
+                      (      hb-mand.asm):00017         ; interupt service routine
+                      (      hb-mand.asm):00018                 ORG     $500
                       (      hb-mand.asm):00019         
-                      (      hb-mand.asm):00020         
+0500 0008             (      hb-mand.asm):00020         OFLOW   FCB     $00,$08         ; 16 bit overflow value
                       (      hb-mand.asm):00021         
                       (      hb-mand.asm):00022                 ORG     $1000           ; Jump to this location with G 1000 in MON09 or ASSIST9
 1000                  (      hb-mand.asm):00023         CONFIG:
@@ -33,89 +33,104 @@
 100B 6F63             (      hb-mand.asm):00033                 CLR     3,S             ; Clear Y (temp high byte)
                       (      hb-mand.asm):00034                                         ; Dispite what mand_get says in mandelbrot.asm itterations is in 6,S
                       (      hb-mand.asm):00035         
-100D 7F1092           (      hb-mand.asm):00036                 CLR     TIMER           ; Clear the timer space
-1010 7F1093           (      hb-mand.asm):00037                 CLR     TIMER+1
-1013 7F1094           (      hb-mand.asm):00038                 CLR     TIMER+2
-1016 7F1095           (      hb-mand.asm):00039                 CLR     TIMER+3
-1019 7F1096           (      hb-mand.asm):00040                 CLR     BCDT            ;Clear the BCD SPACE
-101C 7F1097           (      hb-mand.asm):00041                 CLR     BCDT+1          
-101F 7F1098           (      hb-mand.asm):00042                 CLR     BCDT+2
-1022 7F1099           (      hb-mand.asm):00043                 CLR     BCDT+3         
-                      (      hb-mand.asm):00044         
+100D 7F108F           (      hb-mand.asm):00036                 CLR     TIMER           ; Clear the timer space
+1010 7F1090           (      hb-mand.asm):00037                 CLR     TIMER+1
+1013 7F1091           (      hb-mand.asm):00038                 CLR     TIMER+2
+1016 7F1092           (      hb-mand.asm):00039                 CLR     TIMER+3
+1019 7F1093           (      hb-mand.asm):00040                 CLR     BCDT            ;Clear the BCD SPACE
+101C 7F1094           (      hb-mand.asm):00041                 CLR     BCDT+1          
+101F 7F1095           (      hb-mand.asm):00042                 CLR     BCDT+2
+1022 7F1096           (      hb-mand.asm):00043                 CLR     BCDT+3         
+                      (      hb-mand.asm):00044                 
                       (      hb-mand.asm):00045         
-1025 CC0001           (      hb-mand.asm):00046                 LDD     #1              ; overflow value in ms                 
-1028 FDA03C           (      hb-mand.asm):00047                 STD     TBYTH           ; Set the Timer  
-102B 1CEF             (      hb-mand.asm):00048                 ANDCC   #$EF            ; enable interupts from IRQ line
-102D 8681             (      hb-mand.asm):00049                 LDA     #$81            ; bit 1 and 8 set in A (set interupts start timer) 
-102F B7A03B           (      hb-mand.asm):00050                 STA     TCTRL           ; start timer
+1025 8608             (      hb-mand.asm):00046                 LDA     #8              ; overflow value in ms                 
+1027 B7A03C           (      hb-mand.asm):00047                 STA     TTICK           ; Set the Timer from LSB 
+102A 1CEF             (      hb-mand.asm):00048                 ANDCC   #$EF            ; enable interupts from IRQ line (6309)
+102C 8601             (      hb-mand.asm):00049                 LDA     #1              ; bit 1 and 8 set in A (set interupts start timer on AVR) 
+102E B7A03B           (      hb-mand.asm):00050                 STA     TCTRL           ; start timer
                       (      hb-mand.asm):00051         
-1032                  (      hb-mand.asm):00052         loop:
-1032 170149           (      hb-mand.asm):00053                 LBSR    mand_get        ; Compute Mandelbrot for current position
-1035 1700D6           (      hb-mand.asm):00054                 LBSR    PLOT            ; Map result to a gradient character and send it to UART
+1031                  (      hb-mand.asm):00052         loop:
+1031 170147           (      hb-mand.asm):00053                 LBSR    mand_get        ; Compute Mandelbrot for current position
+1034 1700D4           (      hb-mand.asm):00054                 LBSR    PLOT            ; Map result to a gradient character and send it to UART
                       (      hb-mand.asm):00055         
-1038 ECE4             (      hb-mand.asm):00056                 LDD     ,S              ; Load X register
-103A C30001           (      hb-mand.asm):00057                 ADDD    #1              ; Increment X
-103D EDE4             (      hb-mand.asm):00058                 STD     ,S              ; Save X back
+1037 ECE4             (      hb-mand.asm):00056                 LDD     ,S              ; Load X register
+1039 C30001           (      hb-mand.asm):00057                 ADDD    #1              ; Increment X
+103C EDE4             (      hb-mand.asm):00058                 STD     ,S              ; Save X back
                       (      hb-mand.asm):00059         
-103F 10830020         (      hb-mand.asm):00060                 CMPD    #MAND_WIDTH     ; Check if X reached the width
-1043 26ED             (      hb-mand.asm):00061                 BNE     loop            ; If not, continue
+103E 10830020         (      hb-mand.asm):00060                 CMPD    #MAND_WIDTH     ; Check if X reached the width
+1042 26ED             (      hb-mand.asm):00061                 BNE     loop            ; If not, continue
                       (      hb-mand.asm):00062         
-1045 1700BD           (      hb-mand.asm):00063                 LBSR    CRLF            ; Send CRLF to start a new line
-1048 6FE4             (      hb-mand.asm):00064                 CLR     ,S              ; Reset X to 0
-104A 6F61             (      hb-mand.asm):00065                 CLR     1,S
+1044 1700BB           (      hb-mand.asm):00063                 LBSR    CRLF            ; Send CRLF to start a new line
+1047 6FE4             (      hb-mand.asm):00064                 CLR     ,S              ; Reset X to 0
+1049 6F61             (      hb-mand.asm):00065                 CLR     1,S
                       (      hb-mand.asm):00066         
-104C EC62             (      hb-mand.asm):00067                 LDD     2,S             ; Load Y register
-104E C30001           (      hb-mand.asm):00068                 ADDD    #1              ; Increment Y
-1051 ED62             (      hb-mand.asm):00069                 STD     2,S             ; Save Y back
+104B EC62             (      hb-mand.asm):00067                 LDD     2,S             ; Load Y register
+104D C30001           (      hb-mand.asm):00068                 ADDD    #1              ; Increment Y
+1050 ED62             (      hb-mand.asm):00069                 STD     2,S             ; Save Y back
                       (      hb-mand.asm):00070         
-1053 10830016         (      hb-mand.asm):00071                 CMPD    #MAND_HEIGHT    ; Check if Y reached the height
-1057 26D9             (      hb-mand.asm):00072                 BNE     loop            ; If not, continue
-1059 3265             (      hb-mand.asm):00073                 LEAS    5,S             ; Deallocate stack
+1052 10830016         (      hb-mand.asm):00071                 CMPD    #MAND_HEIGHT    ; Check if Y reached the height
+1056 26D9             (      hb-mand.asm):00072                 BNE     loop            ; If not, continue
+1058 3265             (      hb-mand.asm):00073                 LEAS    5,S             ; Deallocate stack
                       (      hb-mand.asm):00074                 
-105B                  (      hb-mand.asm):00075         DONE:       
-105B 4F               (      hb-mand.asm):00076                 CLRA
-105C B7A03B           (      hb-mand.asm):00077                 STA     TCTRL           ; Stop Timer
-105F 1A10             (      hb-mand.asm):00078                 ORCC    #$10            ; disable interups IRQ line
-1061 FC1094           (      hb-mand.asm):00079                 LDD     TIMER+2         ; pull just the 16 bits off the bottom of the timer.
-1064 8D3C             (      hb-mand.asm):00080                 BSR     BN2BCD          ; break out BCD to Q
-1066 10FD1096         (      hb-mand.asm):00081                 STQ     BCDT            ; save temp for testing
-106A 8E1096           (      hb-mand.asm):00082                 LDX     #BCDT           ; index for BCD Printer
-106D 1700BF           (      hb-mand.asm):00083                 LBSR    PRINT_BCD       ; Print BCD ms
-1070 8E109B           (      hb-mand.asm):00084                 LDX     #TSTR           ; get ready to print the string
-1073 1700B0           (      hb-mand.asm):00085                 LBSR    PRINT           ; Print the String
-1076 17008C           (      hb-mand.asm):00086                 LBSR    CRLF            ; CR
-                      (      hb-mand.asm):00087                 
-                      (      hb-mand.asm):00088         
-                      (      hb-mand.asm):00089                 ifdef h6309
-                      (      hb-mand.asm):00090                 
-1079 113D00           (      hb-mand.asm):00091                 LDMD    #0              ; h6809 emulation mode
+105A                  (      hb-mand.asm):00075         DONE:       
+                      (      hb-mand.asm):00076                 ;CLRA
+                      (      hb-mand.asm):00077                 ;STA     TCTRL           ; Stop Timer
+                      (      hb-mand.asm):00078                 ;ORCC    #$10            ; disable interups IRQ line                     
+105A FC1091           (      hb-mand.asm):00079                 LDD     TIMER+2          ; pull just the 16 bits off the bottom of the timer.  
+                      (      hb-mand.asm):00080                 ;MULD    #8              ; multiply by the value at OFLOW
+                      (      hb-mand.asm):00081                 ;EXG     D,W             ; we need the bottom 16 bits ie bcd in d
+105D 8D40             (      hb-mand.asm):00082                 BSR     BN2BCD          ; break out BCD to Q
+105F 10FD1093         (      hb-mand.asm):00083                 STQ     BCDT            ; save temp for testing
+1063 8E1093           (      hb-mand.asm):00084                 LDX     #BCDT           ; index for BCD Printer
+1066 1700C3           (      hb-mand.asm):00085                 LBSR    PRINT_BCD       ; Print BCD ms
+1069 8E1098           (      hb-mand.asm):00086                 LDX     #TSTR           ; get ready to print the string
+106C 1700B4           (      hb-mand.asm):00087                 LBSR    PRINT           ; Print the String
+106F 170090           (      hb-mand.asm):00088                 LBSR    CRLF            ; CR
+                      (      hb-mand.asm):00089                 
+                      (      hb-mand.asm):00090         
+                      (      hb-mand.asm):00091                 ifdef h6309
                       (      hb-mand.asm):00092                 
-                      (      hb-mand.asm):00093                 endif
-                      (      hb-mand.asm):00094         
-107C 6E9FFFFE         (      hb-mand.asm):00095                 JMP     [$FFFE]         ; Jump to reset vector
+1072 113D00           (      hb-mand.asm):00093                 LDMD    #0              ; h6809 emulation mode
+                      (      hb-mand.asm):00094                 
+                      (      hb-mand.asm):00095                 endif
                       (      hb-mand.asm):00096         
-                      (      hb-mand.asm):00097         ;; timer interupt service routine 
-1080                  (      hb-mand.asm):00098         ISR:
-1080 B6A03B           (      hb-mand.asm):00099                 LDA     TCTRL           ; clear the interupt 
-1083 10FC1092         (      hb-mand.asm):00100                 LDQ     TIMER           ; Load the timer
-1087 105C             (      hb-mand.asm):00101                 INCW                    ; Begin 32bit inc.
-1089 2602             (      hb-mand.asm):00102                 BNE     L2              
-108B 104C             (      hb-mand.asm):00103                 INCD                    
-     108D             (      hb-mand.asm):00104         L2      EQU     *
-                      (      hb-mand.asm):00105         
-108D 10FD1092         (      hb-mand.asm):00106                 STQ     TIMER           ; place the timer back in memory
-1091 3B               (      hb-mand.asm):00107                 RTI                     ; Return from interupt
-                      (      hb-mand.asm):00108         
-1092 00000000         (      hb-mand.asm):00109         TIMER   FCB 0,0,0,0             ; 32bit Timer
-1096 00000000FF       (      hb-mand.asm):00110         BCDT:   FCB 0,0,0,0,255         ; Binary coded decimal output
-109B                  (      hb-mand.asm):00111         TSTR:     
-109B 206D7365632E     (      hb-mand.asm):00112                 FCC " msec."  ; The message string
-10A1 00               (      hb-mand.asm):00113                 FCB 0         ; Null Terminator    
-                      (      hb-mand.asm):00114         
-                      (      hb-mand.asm):00115         
-                      (      hb-mand.asm):00116         ;; includes uart and multi-mandelbrot for 24 bit fp math for optimal results.
-                      (      hb-mand.asm):00117         
-                      (      hb-mand.asm):00118                 INCLUDE "bn2bcd.asm"    ;bin 2 bcd converter
+1075 6E9FFFFE         (      hb-mand.asm):00097                 JMP     [$FFFE]         ; Jump to reset vector
+                      (      hb-mand.asm):00098         
+                      (      hb-mand.asm):00099         ;; timer interupt service routine 
+1079                  (      hb-mand.asm):00100         ISR:
+                      (      hb-mand.asm):00101                 ;; end early if we need to to save so many cycles!!
+                      (      hb-mand.asm):00102                 ;; we are going to do very small incriments
+1079 B6A03B           (      hb-mand.asm):00103                 LDA     TCTRL           ; clear the interupt
+107C 7C1092           (      hb-mand.asm):00104                 INC     TIMER+3         ; start incriments to a 32bit Big endian number
+107F 260D             (      hb-mand.asm):00105                 BNE L2
+1081 7C1091           (      hb-mand.asm):00106                 INC     TIMER+2
+1084 2608             (      hb-mand.asm):00107                 BNE L2  
+1086 7C1090           (      hb-mand.asm):00108                 INC     TIMER+1
+1089 2603             (      hb-mand.asm):00109                 BNE L2
+108B 7C108F           (      hb-mand.asm):00110                 INC     TIMER
+108E 3B               (      hb-mand.asm):00111         L2      RTI
+                      (      hb-mand.asm):00112         
+                      (      hb-mand.asm):00113         ;        LDA     TCTRL           ; clear the interupt 
+                      (      hb-mand.asm):00114         ;        LDQ     TIMER           ; Load the timer
+                      (      hb-mand.asm):00115         ;        INCW                    ; Begin 32bit inc.
+                      (      hb-mand.asm):00116         ;        BNE     L2              
+                      (      hb-mand.asm):00117         ;        INCD                    
+                      (      hb-mand.asm):00118         ;L2      EQU     *
+                      (      hb-mand.asm):00119         ;
+                      (      hb-mand.asm):00120         ;        STQ     TIMER           ; place the timer back in memory
+                      (      hb-mand.asm):00121         ;        RTI                     ; Return from interupt
+                      (      hb-mand.asm):00122         
+                      (      hb-mand.asm):00123         
+108F 00000000         (      hb-mand.asm):00124         TIMER   FCB 0,0,0,0             ; 32bit Timer
+1093 00000000FF       (      hb-mand.asm):00125         BCDT:   FCB 0,0,0,0,255         ; Binary coded decimal output
+1098                  (      hb-mand.asm):00126         TSTR:     
+1098 206D7365632E     (      hb-mand.asm):00127                 FCC " msec."  ; The message string
+109E 00               (      hb-mand.asm):00128                 FCB 0         ; Null Terminator    
+                      (      hb-mand.asm):00129         
+                      (      hb-mand.asm):00130         
+                      (      hb-mand.asm):00131         ;; includes uart and multi-mandelbrot for 24 bit fp math for optimal results.
+                      (      hb-mand.asm):00132         
+                      (      hb-mand.asm):00133                 INCLUDE "bn2bcd.asm"    ;bin 2 bcd converter
                       (       bn2bcd.asm):00001         ;
                       (       bn2bcd.asm):00002         ; Title:                Binary to BCD Conversion 
                       (       bn2bcd.asm):00003         ;
@@ -133,76 +148,76 @@
                       (       bn2bcd.asm):00015         ; Registers Used:       Q,CC
                       (       bn2bcd.asm):00016         ; 
                       (       bn2bcd.asm):00017         
-10A2                  (       bn2bcd.asm):00018         BN2BCD:
+109F                  (       bn2bcd.asm):00018         BN2BCD:
                       (       bn2bcd.asm):00019         ; Allocate space on stack for 1 byte to store 100's digit
-10A2 327D             (       bn2bcd.asm):00020                 LEAS    -3,S            ; Allocate 3 bytes on stack
-10A4 6FE4             (       bn2bcd.asm):00021                 CLR     ,S              ; Clear space for 10000's digit
-10A6 6F61             (       bn2bcd.asm):00022                 CLR     1,S             ; Clear space for 1000's digit
-10A8 6F62             (       bn2bcd.asm):00023                 CLR     2,S             ; Clear Space for 100's digit
+109F 327D             (       bn2bcd.asm):00020                 LEAS    -3,S            ; Allocate 3 bytes on stack
+10A1 6FE4             (       bn2bcd.asm):00021                 CLR     ,S              ; Clear space for 10000's digit
+10A3 6F61             (       bn2bcd.asm):00022                 CLR     1,S             ; Clear space for 1000's digit
+10A5 6F62             (       bn2bcd.asm):00023                 CLR     2,S             ; Clear Space for 100's digit
                       (       bn2bcd.asm):00024         
                       (       bn2bcd.asm):00025         ; Calculate the 10000's digit
                       (       bn2bcd.asm):00026         ; Devide data by 10000
-10AA 11C6FF           (       bn2bcd.asm):00027                 LDF     #$FF            ; Start quotient at -1
-10AD                  (       bn2bcd.asm):00028         D10000LP:
-10AD 115C             (       bn2bcd.asm):00029                 INCF                    ; add 1 to quotient
-10AF 832710           (       bn2bcd.asm):00030                 SUBD    #10000          ; subtract 10000 from the dividend (D)
-10B2 24F9             (       bn2bcd.asm):00031                 BCC     D10000LP        ; jump if difference is still positive
-10B4 C32710           (       bn2bcd.asm):00032                 ADDD    #10000          ; if not add the last 10000 back.
-10B7 11E7E4           (       bn2bcd.asm):00033                 STF     ,S              ; save the 10000's digit in stack space S
+10A7 11C6FF           (       bn2bcd.asm):00027                 LDF     #$FF            ; Start quotient at -1
+10AA                  (       bn2bcd.asm):00028         D10000LP:
+10AA 115C             (       bn2bcd.asm):00029                 INCF                    ; add 1 to quotient
+10AC 832710           (       bn2bcd.asm):00030                 SUBD    #10000          ; subtract 10000 from the dividend (D)
+10AF 24F9             (       bn2bcd.asm):00031                 BCC     D10000LP        ; jump if difference is still positive
+10B1 C32710           (       bn2bcd.asm):00032                 ADDD    #10000          ; if not add the last 10000 back.
+10B4 11E7E4           (       bn2bcd.asm):00033                 STF     ,S              ; save the 10000's digit in stack space S
                       (       bn2bcd.asm):00034         ; Calculate the 1000's digit
                       (       bn2bcd.asm):00035         ; Divide the data by 1000
-10BA 11C6FF           (       bn2bcd.asm):00036                 LDF     #$FF            ; Start quotient at -1
-10BD                  (       bn2bcd.asm):00037         D1000LP:
-10BD 115C             (       bn2bcd.asm):00038                 INCF                    ; add 1 to quotient
-10BF 8303E8           (       bn2bcd.asm):00039                 SUBD    #1000           ; subtract 1000 from the dividend (D)
-10C2 24F9             (       bn2bcd.asm):00040                 BCC     D1000LP         ; jump if difference is still postive
-10C4 C303E8           (       bn2bcd.asm):00041                 ADDD    #1000           ; if not add the last 1000 back.
-10C7 11E761           (       bn2bcd.asm):00042                 STF     1,S             ; save the 1000's digit in stack space 1,S
+10B7 11C6FF           (       bn2bcd.asm):00036                 LDF     #$FF            ; Start quotient at -1
+10BA                  (       bn2bcd.asm):00037         D1000LP:
+10BA 115C             (       bn2bcd.asm):00038                 INCF                    ; add 1 to quotient
+10BC 8303E8           (       bn2bcd.asm):00039                 SUBD    #1000           ; subtract 1000 from the dividend (D)
+10BF 24F9             (       bn2bcd.asm):00040                 BCC     D1000LP         ; jump if difference is still postive
+10C1 C303E8           (       bn2bcd.asm):00041                 ADDD    #1000           ; if not add the last 1000 back.
+10C4 11E761           (       bn2bcd.asm):00042                 STF     1,S             ; save the 1000's digit in stack space 1,S
                       (       bn2bcd.asm):00043         
                       (       bn2bcd.asm):00044         ; Calculate 100's digit (for numbers greater than or equal to 100)
                       (       bn2bcd.asm):00045         ; Divide the data by 100        
-10CA 11C6FF           (       bn2bcd.asm):00046                 LDF     #$FF            ; Start quotient at -1
-10CD                  (       bn2bcd.asm):00047         D100LP:
-10CD 115C             (       bn2bcd.asm):00048                 INCF                    ; Add 1 to quotient
-10CF 830064           (       bn2bcd.asm):00049                 SUBD    #100            ; Subtract 100 from the dividend (D)
-10D2 24F9             (       bn2bcd.asm):00050                 BCC     D100LP          ; Jump if difference is still positive
-10D4 C30064           (       bn2bcd.asm):00051                 ADDD    #100            ; If not, add the last 100 back
-10D7 11E762           (       bn2bcd.asm):00052                 STF     2,S             ; Save 100's digit in stack space 2,S
+10C7 11C6FF           (       bn2bcd.asm):00046                 LDF     #$FF            ; Start quotient at -1
+10CA                  (       bn2bcd.asm):00047         D100LP:
+10CA 115C             (       bn2bcd.asm):00048                 INCF                    ; Add 1 to quotient
+10CC 830064           (       bn2bcd.asm):00049                 SUBD    #100            ; Subtract 100 from the dividend (D)
+10CF 24F9             (       bn2bcd.asm):00050                 BCC     D100LP          ; Jump if difference is still positive
+10D1 C30064           (       bn2bcd.asm):00051                 ADDD    #100            ; If not, add the last 100 back
+10D4 11E762           (       bn2bcd.asm):00052                 STF     2,S             ; Save 100's digit in stack space 2,S
                       (       bn2bcd.asm):00053         
                       (       bn2bcd.asm):00054         ; Calculate 10's digit from the remainder of 100's division
                       (       bn2bcd.asm):00055         ; Divide the remainder by 10
-10DA 11C6FF           (       bn2bcd.asm):00056                 LDF     #$FF            ; Start quotient at -1
-10DD 115C             (       bn2bcd.asm):00057         D10LP:  INCF                    ; Add 1 to quotient
-10DF 83000A           (       bn2bcd.asm):00058                 SUBD    #10             ; Subtract 10 from the dividend (D)
-10E2 24F9             (       bn2bcd.asm):00059                 BCC     D10LP           ; Jump if difference is still positive
-10E4 C3000A           (       bn2bcd.asm):00060                 ADDD    #10             ; If not, add the last 10 back
+10D7 11C6FF           (       bn2bcd.asm):00056                 LDF     #$FF            ; Start quotient at -1
+10DA 115C             (       bn2bcd.asm):00057         D10LP:  INCF                    ; Add 1 to quotient
+10DC 83000A           (       bn2bcd.asm):00058                 SUBD    #10             ; Subtract 10 from the dividend (D)
+10DF 24F9             (       bn2bcd.asm):00059                 BCC     D10LP           ; Jump if difference is still positive
+10E1 C3000A           (       bn2bcd.asm):00060                 ADDD    #10             ; If not, add the last 10 back
                       (       bn2bcd.asm):00061         
                       (       bn2bcd.asm):00062         ; Combine the 1's and 10's digits
                       (       bn2bcd.asm):00063         ; Shift the 10's digit to the high nibble (left shift 4 times)  
-10E7 1FF8             (       bn2bcd.asm):00064                 TFR     F,A             ; Load 10's digit in A
-10E9 48               (       bn2bcd.asm):00065                 LSLA                    ; Shift 1 time (equivalent to multiplying by 2)
-10EA 48               (       bn2bcd.asm):00066                 LSLA                    ; Shift 2 times (equivalent to multiplying by 4)
-10EB 48               (       bn2bcd.asm):00067                 LSLA                    ; Shift 3 times (equivalent to multiplying by 8)
-10EC 48               (       bn2bcd.asm):00068                 LSLA                    ; Shift 4 times (equivalent to multiplying by 16)
-10ED 103089           (       bn2bcd.asm):00069                 ADDR    A,B             ; add 1's digit to 10's digit, result in B (6309)
-10F0 1F06             (       bn2bcd.asm):00070                 TFR     D,W             ; move lower digits to bottom of Q
-10F2 E662             (       bn2bcd.asm):00071                 LDB     2,S             ; load 100's digit into B
-10F4 A661             (       bn2bcd.asm):00072                 LDA     1,S             ; load 1000's digit into A
-10F6 48               (       bn2bcd.asm):00073                 LSLA                    ; Shift 1 time (equivalent to multiplying by 2)
-10F7 48               (       bn2bcd.asm):00074                 LSLA                    ; Shift 2 times (equivalent to multiplying by 4)
-10F8 48               (       bn2bcd.asm):00075                 LSLA                    ; Shift 3 times (equivalent to multiplying by 8)
-10F9 48               (       bn2bcd.asm):00076                 LSLA                    ; Shift 4 times (equivalent to multiplying by 16)
-10FA 103089           (       bn2bcd.asm):00077                 ADDR    A,B             ; add 100's and 1000's digit, result in B (6309)
-10FD 1F9E             (       bn2bcd.asm):00078                 TFR     B,E             ; move B into E (100's and 1000's)
+10E4 1FF8             (       bn2bcd.asm):00064                 TFR     F,A             ; Load 10's digit in A
+10E6 48               (       bn2bcd.asm):00065                 LSLA                    ; Shift 1 time (equivalent to multiplying by 2)
+10E7 48               (       bn2bcd.asm):00066                 LSLA                    ; Shift 2 times (equivalent to multiplying by 4)
+10E8 48               (       bn2bcd.asm):00067                 LSLA                    ; Shift 3 times (equivalent to multiplying by 8)
+10E9 48               (       bn2bcd.asm):00068                 LSLA                    ; Shift 4 times (equivalent to multiplying by 16)
+10EA 103089           (       bn2bcd.asm):00069                 ADDR    A,B             ; add 1's digit to 10's digit, result in B (6309)
+10ED 1F06             (       bn2bcd.asm):00070                 TFR     D,W             ; move lower digits to bottom of Q
+10EF E662             (       bn2bcd.asm):00071                 LDB     2,S             ; load 100's digit into B
+10F1 A661             (       bn2bcd.asm):00072                 LDA     1,S             ; load 1000's digit into A
+10F3 48               (       bn2bcd.asm):00073                 LSLA                    ; Shift 1 time (equivalent to multiplying by 2)
+10F4 48               (       bn2bcd.asm):00074                 LSLA                    ; Shift 2 times (equivalent to multiplying by 4)
+10F5 48               (       bn2bcd.asm):00075                 LSLA                    ; Shift 3 times (equivalent to multiplying by 8)
+10F6 48               (       bn2bcd.asm):00076                 LSLA                    ; Shift 4 times (equivalent to multiplying by 16)
+10F7 103089           (       bn2bcd.asm):00077                 ADDR    A,B             ; add 100's and 1000's digit, result in B (6309)
+10FA 1F9E             (       bn2bcd.asm):00078                 TFR     B,E             ; move B into E (100's and 1000's)
                       (       bn2bcd.asm):00079         
                       (       bn2bcd.asm):00080         ; Return the final BCD value (A = BCD data)
-10FF 14               (       bn2bcd.asm):00081                 SEXW                    ; CLEAR W
-1100 E6E4             (       bn2bcd.asm):00082                 LDB     ,S              ; Load 10000's into B
-1102 3263             (       bn2bcd.asm):00083                 LEAS    3,S             ; Deallocate 3 bytes from stack
-1104 39               (       bn2bcd.asm):00084                 RTS                     ; Return with BCD data in register A
+10FC 14               (       bn2bcd.asm):00081                 SEXW                    ; CLEAR W
+10FD E6E4             (       bn2bcd.asm):00082                 LDB     ,S              ; Load 10000's into B
+10FF 3263             (       bn2bcd.asm):00083                 LEAS    3,S             ; Deallocate 3 bytes from stack
+1101 39               (       bn2bcd.asm):00084                 RTS                     ; Return with BCD data in register A
                       (       bn2bcd.asm):00085         
-                      (      hb-mand.asm):00119         
-                      (      hb-mand.asm):00120                 INCLUDE "68b50.asm"     ;68b50 routines
+                      (      hb-mand.asm):00134         
+                      (      hb-mand.asm):00135                 INCLUDE "68b50.asm"     ;68b50 routines
                       (        68b50.asm):00001         ; UART and control the routines are set up for the 6850
                       (        68b50.asm):00002         ; or 'like' such as the 6850 Wrapper in the HB63C09M.
                       (        68b50.asm):00003         
@@ -210,74 +225,74 @@
      A001             (        68b50.asm):00005         UDATA   EQU $A001           ; UART Data Register
                       (        68b50.asm):00006         
                       (        68b50.asm):00007         ; Send CRLF to terminal
-1105 860A             (        68b50.asm):00008         CRLF:   LDA #$0A               ; Line feed
-1107 8D0E             (        68b50.asm):00009                 BSR CHOUT
-1109 860D             (        68b50.asm):00010                 LDA #$0D               ; Carriage return
-110B 8D0A             (        68b50.asm):00011                 BSR CHOUT
-110D 39               (        68b50.asm):00012                 RTS
+1102 860A             (        68b50.asm):00008         CRLF:   LDA #$0A               ; Line feed
+1104 8D0E             (        68b50.asm):00009                 BSR CHOUT
+1106 860D             (        68b50.asm):00010                 LDA #$0D               ; Carriage return
+1108 8D0A             (        68b50.asm):00011                 BSR CHOUT
+110A 39               (        68b50.asm):00012                 RTS
                       (        68b50.asm):00013         
                       (        68b50.asm):00014         ; Map iterations to printable ASCII characters
-110E A666             (        68b50.asm):00015         PLOT:   LDA 6,S                ; Load iteration count
-1110 4C               (        68b50.asm):00016                 INCA                   ; Offset for gradient lookup
-1111 108E115E         (        68b50.asm):00017                 LDY #PSUSHD            ; Address of gradient table
-1115 A6A6             (        68b50.asm):00018                 LDA A,Y                ; Load corresponding ASCII shade
+110B A666             (        68b50.asm):00015         PLOT:   LDA 6,S                ; Load iteration count
+110D 4C               (        68b50.asm):00016                 INCA                   ; Offset for gradient lookup
+110E 108E115B         (        68b50.asm):00017                 LDY #PSUSHD            ; Address of gradient table
+1112 A6A6             (        68b50.asm):00018                 LDA A,Y                ; Load corresponding ASCII shade
                       (        68b50.asm):00019         ; Fall through to `CHOUT`
                       (        68b50.asm):00020         
-1117 3402             (        68b50.asm):00021         CHOUT:  PSHS A                 ; Save character in A
-1119 B6A000           (        68b50.asm):00022         WRWAIT: LDA USTAT              ; Check UART status
-111C 8502             (        68b50.asm):00023                 BITA #2                ; Ready to send?
-111E 27F9             (        68b50.asm):00024                 BEQ WRWAIT             ; Wait until ready
-1120 3502             (        68b50.asm):00025                 PULS A                 ; Restore character
-1122 B7A001           (        68b50.asm):00026                 STA UDATA              ; Send character
-1125 39               (        68b50.asm):00027                 RTS
+1114 3402             (        68b50.asm):00021         CHOUT:  PSHS A                 ; Save character in A
+1116 B6A000           (        68b50.asm):00022         WRWAIT: LDA USTAT              ; Check UART status
+1119 8502             (        68b50.asm):00023                 BITA #2                ; Ready to send?
+111B 27F9             (        68b50.asm):00024                 BEQ WRWAIT             ; Wait until ready
+111D 3502             (        68b50.asm):00025                 PULS A                 ; Restore character
+111F B7A001           (        68b50.asm):00026                 STA UDATA              ; Send character
+1122 39               (        68b50.asm):00027                 RTS
                       (        68b50.asm):00028         
                       (        68b50.asm):00029         ;; STRING START STORED IN X
-1126 A680             (        68b50.asm):00030         PRINT:  LDA ,X+                 ; START STRING IN X
-1128 2704             (        68b50.asm):00031                 BEQ PRDONE              ; IF NULL TERM
-112A 8DEB             (        68b50.asm):00032                 BSR CHOUT               ; PRINT THAT CHARACTER
-112C 20F8             (        68b50.asm):00033                 BRA PRINT               ; LETS GET THE NEXT ONE
-112E 39               (        68b50.asm):00034         PRDONE: RTS                     ; RETURN FROM PRINT
+1123 A680             (        68b50.asm):00030         PRINT:  LDA ,X+                 ; START STRING IN X
+1125 2704             (        68b50.asm):00031                 BEQ PRDONE              ; IF NULL TERM
+1127 8DEB             (        68b50.asm):00032                 BSR CHOUT               ; PRINT THAT CHARACTER
+1129 20F8             (        68b50.asm):00033                 BRA PRINT               ; LETS GET THE NEXT ONE
+112B 39               (        68b50.asm):00034         PRDONE: RTS                     ; RETURN FROM PRINT
                       (        68b50.asm):00035         
-112F                  (        68b50.asm):00036         PRINT_BCD:   
-112F A680             (        68b50.asm):00037                 LDA ,X+                 ;Start of BCD in X
-1131 27FC             (        68b50.asm):00038                 BEQ PRINT_BCD           ;Skip MSB's Zeros
-1133 1F89             (        68b50.asm):00039                 TFR  A,B                ;Save A
-1135 81FF             (        68b50.asm):00040                 CMPA #$FF               ;it's the end?
-1137 2724             (        68b50.asm):00041                 BEQ BCDONE              ;we are done.
-1139 44               (        68b50.asm):00042                 LSRA                    ;Top Nibble
-113A 44               (        68b50.asm):00043                 LSRA
-113B 44               (        68b50.asm):00044                 LSRA
-113C 44               (        68b50.asm):00045                 LSRA
-113D 2714             (        68b50.asm):00046                 BEQ SKIP_HIGH           ;Skip the High bit (we know the low bits are > 1)                    
-113F 8A30             (        68b50.asm):00047                 ORA #$30                ;convert to ASCII
-1141 8DD4             (        68b50.asm):00048                 BSR CHOUT               ;send character
-1143                  (        68b50.asm):00049         KEEPZERO:
-1143 A680             (        68b50.asm):00050                 LDA ,X+                 ;Get next byte
-1145 1F89             (        68b50.asm):00051                 TFR A,B                 ;Save A
-1147 81FF             (        68b50.asm):00052                 CMPA #$FF               ;is it the end?
-1149 2712             (        68b50.asm):00053                 BEQ BCDONE              ;We're Done
-114B 44               (        68b50.asm):00054                 LSRA                    ;Top Nibble
-114C 44               (        68b50.asm):00055                 LSRA
-114D 44               (        68b50.asm):00056                 LSRA
-114E 44               (        68b50.asm):00057                 LSRA
-114F 8A30             (        68b50.asm):00058                 ORA #$30                ;convert to ASCII
-1151 8DC4             (        68b50.asm):00059                 BSR CHOUT               ;send character
+112C                  (        68b50.asm):00036         PRINT_BCD:   
+112C A680             (        68b50.asm):00037                 LDA ,X+                 ;Start of BCD in X
+112E 27FC             (        68b50.asm):00038                 BEQ PRINT_BCD           ;Skip MSB's Zeros
+1130 1F89             (        68b50.asm):00039                 TFR  A,B                ;Save A
+1132 81FF             (        68b50.asm):00040                 CMPA #$FF               ;it's the end? (value of number is 0)
+1134 2724             (        68b50.asm):00041                 BEQ BCDONE              ;we are done.
+1136 44               (        68b50.asm):00042                 LSRA                    ;Top Nibble
+1137 44               (        68b50.asm):00043                 LSRA
+1138 44               (        68b50.asm):00044                 LSRA
+1139 44               (        68b50.asm):00045                 LSRA
+113A 2714             (        68b50.asm):00046                 BEQ SKIP_HIGH           ;Skip the High bit (we know the low bits are > 1)                    
+113C 8A30             (        68b50.asm):00047                 ORA #$30                ;convert to ASCII
+113E 8DD4             (        68b50.asm):00048                 BSR CHOUT               ;send character
+1140                  (        68b50.asm):00049         KEEPZERO:
+1140 A680             (        68b50.asm):00050                 LDA ,X+                 ;Get next byte
+1142 1F89             (        68b50.asm):00051                 TFR A,B                 ;Save A
+1144 81FF             (        68b50.asm):00052                 CMPA #$FF               ;is it the end?
+1146 2712             (        68b50.asm):00053                 BEQ BCDONE              ;We're Done
+1148 44               (        68b50.asm):00054                 LSRA                    ;Top Nibble
+1149 44               (        68b50.asm):00055                 LSRA
+114A 44               (        68b50.asm):00056                 LSRA
+114B 44               (        68b50.asm):00057                 LSRA
+114C 8A30             (        68b50.asm):00058                 ORA #$30                ;convert to ASCII
+114E 8DC4             (        68b50.asm):00059                 BSR CHOUT               ;send character
                       (        68b50.asm):00060         
-1153                  (        68b50.asm):00061         SKIP_HIGH:
-1153 1F98             (        68b50.asm):00062                 TFR  B,A                ;restore character
-1155 840F             (        68b50.asm):00063                 ANDA #$0F               ;MASK HIGH
-1157 8A30             (        68b50.asm):00064                 ORA #$30
-1159 8DBC             (        68b50.asm):00065                 BSR CHOUT
-115B 8DE6             (        68b50.asm):00066                 BSR KEEPZERO            ;NEXT
-115D                  (        68b50.asm):00067         BCDONE:
-115D 39               (        68b50.asm):00068                 RTS                     ; Return
+1150                  (        68b50.asm):00061         SKIP_HIGH:
+1150 1F98             (        68b50.asm):00062                 TFR  B,A                ;restore character
+1152 840F             (        68b50.asm):00063                 ANDA #$0F               ;MASK HIGH
+1154 8A30             (        68b50.asm):00064                 ORA #$30
+1156 8DBC             (        68b50.asm):00065                 BSR CHOUT
+1158 8DE6             (        68b50.asm):00066                 BSR KEEPZERO            ;NEXT
+115A                  (        68b50.asm):00067         BCDONE:
+115A 39               (        68b50.asm):00068                 RTS                     ; Return
                       (        68b50.asm):00069         
                       (        68b50.asm):00070         
                       (        68b50.asm):00071         ; 16 levels of pseudo-shades in 7-Bit ASCII (darkest to lightest)
-115E 23402526582A2B3D (        68b50.asm):00072         PSUSHD: FCB $23,$40,$25,$26,$58,$2A,$2B,$3D ; Darker characters
-1166 2D7E3A2E2C602020 (        68b50.asm):00073                 FCB $2D,$7E,$3A,$2E,$2C,$60,$20,$20 ; Lighter characters
-                      (      hb-mand.asm):00121                 
-                      (      hb-mand.asm):00122                 INCLUDE "../6x09/mandelbrot24.asm" ; Include Mandelbrot and fixed-point routines
+115B 23402526582A2B3D (        68b50.asm):00072         PSUSHD: FCB $23,$40,$25,$26,$58,$2A,$2B,$3D ; Darker characters
+1163 2D7E3A2E2C602020 (        68b50.asm):00073                 FCB $2D,$7E,$3A,$2E,$2C,$60,$20,$20 ; Lighter characters
+                      (      hb-mand.asm):00136                 
+                      (      hb-mand.asm):00137                 INCLUDE "../6x09/mandelbrot24.asm" ; Include Mandelbrot and fixed-point routines
                       (/mandelbrot24.asm):00001                 include "fixedpt24.asm"
                       (    fixedpt24.asm):00001         ;;; Supplementary routines to allow for 16.8 fixed point intermediates
                       (    fixedpt24.asm):00002         ;;; in some calculations and for some possibly cheating optimization
@@ -309,45 +324,45 @@
      00F8             (      fixedpt.asm):00021         FP_XT:  equ FP_T4               ; extra (overflow/remainder)
      00FA             (      fixedpt.asm):00022         FP_RE:  equ FP_T5               ; result
                       (      fixedpt.asm):00023         
-116E                  (      fixedpt.asm):00024         FP_LD_BYTE macro                ; d=a
+116B                  (      fixedpt.asm):00024         FP_LD_BYTE macro                ; d=a
                       (      fixedpt.asm):00025                 clrb
                       (      fixedpt.asm):00026                 endm
                       (      fixedpt.asm):00027                 
-116E                  (      fixedpt.asm):00028         FP_LD macro                     ; d=(ea) ; fp
+116B                  (      fixedpt.asm):00028         FP_LD macro                     ; d=(ea) ; fp
                       (      fixedpt.asm):00029                 ldd \*
                       (      fixedpt.asm):00030                 endm
                       (      fixedpt.asm):00031         
-116E                  (      fixedpt.asm):00032         FP_LD_INT macro                 ; d=(ea) ; int
+116B                  (      fixedpt.asm):00032         FP_LD_INT macro                 ; d=(ea) ; int
                       (      fixedpt.asm):00033                 lda \*
                       (      fixedpt.asm):00034                 clrb
                       (      fixedpt.asm):00035                 endm
                       (      fixedpt.asm):00036         
-116E                  (      fixedpt.asm):00037         FP_ST macro                     ; (ea)=d
+116B                  (      fixedpt.asm):00037         FP_ST macro                     ; (ea)=d
                       (      fixedpt.asm):00038                 std \*
                       (      fixedpt.asm):00039                 endm
                       (      fixedpt.asm):00040         
-116E                  (      fixedpt.asm):00041         FP_FLOOR macro                  ; d=floor(d)
+116B                  (      fixedpt.asm):00041         FP_FLOOR macro                  ; d=floor(d)
                       (      fixedpt.asm):00042                 clrb
                       (      fixedpt.asm):00043                 endm
                       (      fixedpt.asm):00044         
-116E                  (      fixedpt.asm):00045         FP_SUBTRACT macro               ; d=d-(ea)
+116B                  (      fixedpt.asm):00045         FP_SUBTRACT macro               ; d=d-(ea)
                       (      fixedpt.asm):00046                 subd \*
                       (      fixedpt.asm):00047                 endm
                       (      fixedpt.asm):00048         
-116E                  (      fixedpt.asm):00049         FP_ADD macro                    ; d=d+(ea)
+116B                  (      fixedpt.asm):00049         FP_ADD macro                    ; d=d+(ea)
                       (      fixedpt.asm):00050                 addd \*
                       (      fixedpt.asm):00051                 endm
                       (      fixedpt.asm):00052         
-116E                  (      fixedpt.asm):00053         FP_COMPARE macro                ; compare d (set flags)
+116B                  (      fixedpt.asm):00053         FP_COMPARE macro                ; compare d (set flags)
                       (      fixedpt.asm):00054                 cmpd \*
                       (      fixedpt.asm):00055                 endm
                       (      fixedpt.asm):00056         
-116E                  (      fixedpt.asm):00057         FP_MUL2 macro                   ; d=2*d
+116B                  (      fixedpt.asm):00057         FP_MUL2 macro                   ; d=2*d
                       (      fixedpt.asm):00058                 aslb
                       (      fixedpt.asm):00059                 rola
                       (      fixedpt.asm):00060                 endm
                       (      fixedpt.asm):00061         
-116E                  (      fixedpt.asm):00062         FP_NEG macro                    ; d=-d
+116B                  (      fixedpt.asm):00062         FP_NEG macro                    ; d=-d
                       (      fixedpt.asm):00063                 ifdef h6309
                       (      fixedpt.asm):00064                 negd
                       (      fixedpt.asm):00065                 else ; m6809 - 4/8
@@ -357,34 +372,34 @@
                       (      fixedpt.asm):00069                 endif h6309
                       (      fixedpt.asm):00070                 endm
                       (      fixedpt.asm):00071         
-116E                  (      fixedpt.asm):00072         FP_ABS macro                    ; d=|d|
+116B                  (      fixedpt.asm):00072         FP_ABS macro                    ; d=|d|
                       (      fixedpt.asm):00073                 tsta
                       (      fixedpt.asm):00074                 bpl out@
                       (      fixedpt.asm):00075                 FP_NEG
-116E                  (      fixedpt.asm):00076         out@:
+116B                  (      fixedpt.asm):00076         out@:
                       (      fixedpt.asm):00077                 endm
                       (      fixedpt.asm):00078         
-116E                  (      fixedpt.asm):00079         FP_ABS1 macro                   ; d=|(ea)|
+116B                  (      fixedpt.asm):00079         FP_ABS1 macro                   ; d=|(ea)|
                       (      fixedpt.asm):00080                 ldd \*
                       (      fixedpt.asm):00081                 bpl out@
                       (      fixedpt.asm):00082                 FP_NEG
-116E                  (      fixedpt.asm):00083         out@:
+116B                  (      fixedpt.asm):00083         out@:
                       (      fixedpt.asm):00084                 endm
                       (      fixedpt.asm):00085                 
                       (      fixedpt.asm):00086         
                       (      fixedpt.asm):00087                 ifdef h6309
-116E                  (      fixedpt.asm):00088         FP_MULTIPLY macro               ; d=d*(ea)
+116B                  (      fixedpt.asm):00088         FP_MULTIPLY macro               ; d=d*(ea)
                       (      fixedpt.asm):00089                 muld \*
                       (      fixedpt.asm):00090                 tfr b,a
                       (      fixedpt.asm):00091                 tfr e,b
                       (      fixedpt.asm):00092                 endm
                       (      fixedpt.asm):00093                 else ; ! h6309 -> m6809
-116E                  (      fixedpt.asm):00094         FP_MULTIPLY macro               ; d=d*(ea)
+116B                  (      fixedpt.asm):00094         FP_MULTIPLY macro               ; d=d*(ea)
                       (      fixedpt.asm):00095                 ldx \*
                       (      fixedpt.asm):00096                 lbsr fp_mul
                       (      fixedpt.asm):00097                 endm
                       (      fixedpt.asm):00098         
-116E                  (      fixedpt.asm):00099         fp_mul: ; d = d * x ; FP_XT overflow
+116B                  (      fixedpt.asm):00099         fp_mul: ; d = d * x ; FP_XT overflow
                       (      fixedpt.asm):00100                 FP_ST FP_A
                       (      fixedpt.asm):00101                 FP_ABS
                       (      fixedpt.asm):00102                 FP_ST FP_AA
@@ -427,13 +442,13 @@
                       (      fixedpt.asm):00139                 FP_LD #$0000
                       (      fixedpt.asm):00140                 FP_SUBTRACT FP_RE
                       (      fixedpt.asm):00141                 rts
-116E                  (      fixedpt.asm):00142         @retpos:
+116B                  (      fixedpt.asm):00142         @retpos:
                       (      fixedpt.asm):00143                 FP_LD FP_RE
                       (      fixedpt.asm):00144                 rts
                       (      fixedpt.asm):00145                 endif ; h6309
                       (      fixedpt.asm):00146                 
                       (      fixedpt.asm):00147                 ifdef h6309
-116E                  (      fixedpt.asm):00148         FP_DIVIDE macro                 ; d=d/(ea) ; remander in FP_RE
+116B                  (      fixedpt.asm):00148         FP_DIVIDE macro                 ; d=d/(ea) ; remander in FP_RE
                       (      fixedpt.asm):00149                 tfr d,w
                       (      fixedpt.asm):00150                 clra
                       (      fixedpt.asm):00151                 clrb
@@ -441,12 +456,12 @@
                       (      fixedpt.asm):00153                 tfr w,d
                       (      fixedpt.asm):00154                 endm
                       (      fixedpt.asm):00155                 else ; ! h6309 -> m6809
-116E                  (      fixedpt.asm):00156         FP_DIVIDE macro                 ; d=d/(ea) ; remander in FP_RE
+116B                  (      fixedpt.asm):00156         FP_DIVIDE macro                 ; d=d/(ea) ; remander in FP_RE
                       (      fixedpt.asm):00157                 ldx \*
                       (      fixedpt.asm):00158                 lbsr fp_div
                       (      fixedpt.asm):00159                 endm
                       (      fixedpt.asm):00160                 
-116E                  (      fixedpt.asm):00161         fp_div: ; d=d/x ; remainder in FP_XT
+116B                  (      fixedpt.asm):00161         fp_div: ; d=d/x ; remainder in FP_XT
                       (      fixedpt.asm):00162         *       FP_ST FP_A              ; make num unsigned
                       (      fixedpt.asm):00163         *       FP_ABS
                       (      fixedpt.asm):00164                 FP_ST FP_AA
@@ -460,7 +475,7 @@
                       (      fixedpt.asm):00172                 clrb
                       (      fixedpt.asm):00173                 std FP_XT       
                       (      fixedpt.asm):00174                 ldx #16     ;There are 16 bits in C
-116E                  (      fixedpt.asm):00175         @loop:
+116B                  (      fixedpt.asm):00175         @loop:
                       (      fixedpt.asm):00176                 FP_LD FP_XT     
                       (      fixedpt.asm):00177                 asl FP_AA+1    ;Shift hi bit of C into REM
                       (      fixedpt.asm):00178                 rol FP_AA  ;(vacating the lo bit, which will be used for the quotient)
@@ -471,7 +486,7 @@
                       (      fixedpt.asm):00183                 blt @skip  ;Did subtraction succeed?
                       (      fixedpt.asm):00184                 std FP_XT
                       (      fixedpt.asm):00185                 inc FP_AA+1    ;and record a 1 in the quotient
-116E                  (      fixedpt.asm):00186         @skip:
+116B                  (      fixedpt.asm):00186         @skip:
                       (      fixedpt.asm):00187                 leax -1,x       
                       (      fixedpt.asm):00188                 bne @loop
                       (      fixedpt.asm):00189         *       lda FP_A                ; check sign of result
@@ -492,17 +507,17 @@
                       (    fixedpt24.asm):00012                 ;; (y): 16-bit integer
                       (    fixedpt24.asm):00013                 ;; (u): 16.8 fixed point value
                       (    fixedpt24.asm):00014                 ifdef h6309
-116E                  (    fixedpt24.asm):00015         FP24_MULTIPLY   macro   ; (u)=d*(y)
+116B                  (    fixedpt24.asm):00015         FP24_MULTIPLY   macro   ; (u)=d*(y)
                       (    fixedpt24.asm):00016                 muld ,y
                       (    fixedpt24.asm):00017                 stb ,u
                       (    fixedpt24.asm):00018                 stw 1,u
                       (    fixedpt24.asm):00019                 endm
                       (    fixedpt24.asm):00020                 else ; ! h6309 -> m6809
-116E                  (    fixedpt24.asm):00021         FP24_MULTIPLY   macro   ; (u)=d*(y)
+116B                  (    fixedpt24.asm):00021         FP24_MULTIPLY   macro   ; (u)=d*(y)
                       (    fixedpt24.asm):00022                 lbsr fp24_mult
                       (    fixedpt24.asm):00023                 endm
                       (    fixedpt24.asm):00024                 
-116E                  (    fixedpt24.asm):00025         fp24_mult:
+116B                  (    fixedpt24.asm):00025         fp24_mult:
                       (    fixedpt24.asm):00026                 std FP_AA
                       (    fixedpt24.asm):00027                 clr ,u
                       (    fixedpt24.asm):00028                 lda 1,y
@@ -532,25 +547,25 @@
                       (    fixedpt24.asm):00052                 ;; (y): 16-bit integer
                       (    fixedpt24.asm):00053                 ;; d: 8.8 fixed point dividend
                       (    fixedpt24.asm):00054                 ifdef h6309
-116E                  (    fixedpt24.asm):00055         FP24_DIVIDE     macro   ; d=(u)/(y)
+116B                  (    fixedpt24.asm):00055         FP24_DIVIDE     macro   ; d=(u)/(y)
                       (    fixedpt24.asm):00056                 ldq -1,u
                       (    fixedpt24.asm):00057                 clra
                       (    fixedpt24.asm):00058                 divq ,y
                       (    fixedpt24.asm):00059                 tfr w,d
                       (    fixedpt24.asm):00060                 endm
                       (    fixedpt24.asm):00061                 else ; ! h6309 -> m6809
-116E                  (    fixedpt24.asm):00062         FP24_DIVIDE     macro   ; d=(u)/(y)
+116B                  (    fixedpt24.asm):00062         FP24_DIVIDE     macro   ; d=(u)/(y)
                       (    fixedpt24.asm):00063                 lbsr fp24_div
                       (    fixedpt24.asm):00064                 endm
                       (    fixedpt24.asm):00065                 
-116E                  (    fixedpt24.asm):00066         fp24_div:
+116B                  (    fixedpt24.asm):00066         fp24_div:
                       (    fixedpt24.asm):00067                 clr FP_XT
                       (    fixedpt24.asm):00068                 lda ,u
                       (    fixedpt24.asm):00069                 sta FP_XT+1
                       (    fixedpt24.asm):00070                 ldd 1,u
                       (    fixedpt24.asm):00071                 sta FP_RE
                       (    fixedpt24.asm):00072                 ldx #16
-116E                  (    fixedpt24.asm):00073         loop@:  
+116B                  (    fixedpt24.asm):00073         loop@:  
                       (    fixedpt24.asm):00074                 asl FP_RE+1
                       (    fixedpt24.asm):00075                 rol FP_RE
                       (    fixedpt24.asm):00076                 rol FP_XT+1
@@ -560,7 +575,7 @@
                       (    fixedpt24.asm):00080                 blt skip@
                       (    fixedpt24.asm):00081                 std FP_XT
                       (    fixedpt24.asm):00082                 inc FP_RE+1
-116E                  (    fixedpt24.asm):00083         skip@:
+116B                  (    fixedpt24.asm):00083         skip@:
                       (    fixedpt24.asm):00084                 leax -1,x
                       (    fixedpt24.asm):00085                 bne loop@
                       (    fixedpt24.asm):00086                 ldd FP_RE
@@ -574,24 +589,24 @@
                       (    fixedpt24.asm):00094                 ;; a*b=b*a. For paired product: $FF*$FF=$FE01, $7F*$FF=$7E81,
                       (    fixedpt24.asm):00095                 ;; *2=$FD02, $FD02+$00FE=$FE00, so no carry from 16-bit sum.
                       (    fixedpt24.asm):00096                 ifdef h6309
-116E                  (    fixedpt24.asm):00097         FP_SQUARE       macro
+116B                  (    fixedpt24.asm):00097         FP_SQUARE       macro
                       (    fixedpt24.asm):00098                 std FP_RE
                       (    fixedpt24.asm):00099                 muld FP_RE
                       (    fixedpt24.asm):00100                 tfr b,a
                       (    fixedpt24.asm):00101                 tfr e,b
                       (    fixedpt24.asm):00102                 endm
                       (    fixedpt24.asm):00103                 else ; ! h6309 -> m6809
-116E                  (    fixedpt24.asm):00104         FP_SQUARE       macro
+116B                  (    fixedpt24.asm):00104         FP_SQUARE       macro
                       (    fixedpt24.asm):00105                 lbsr fp_sq
                       (    fixedpt24.asm):00106                 endm
                       (    fixedpt24.asm):00107         
-116E                  (    fixedpt24.asm):00108         fp_sq:
+116B                  (    fixedpt24.asm):00108         fp_sq:
                       (    fixedpt24.asm):00109                 tsta
                       (    fixedpt24.asm):00110                 bge skip@
                       (    fixedpt24.asm):00111                 coma
                       (    fixedpt24.asm):00112                 comb
                       (    fixedpt24.asm):00113                 addd #1
-116E                  (    fixedpt24.asm):00114         skip@:  
+116B                  (    fixedpt24.asm):00114         skip@:  
                       (    fixedpt24.asm):00115                 std FP_AA
                       (    fixedpt24.asm):00116                 clr FP_RE
                       (    fixedpt24.asm):00117                 tfr b,a
@@ -638,14 +653,14 @@
      000F             (/mandelbrot24.asm):00023         MAND_MAX_IT equ 15
                       (/mandelbrot24.asm):00024                 endif
                       (/mandelbrot24.asm):00025         
-116E FD80             (/mandelbrot24.asm):00026         xmin:   .word MAND_XMIN
-1170 0380             (/mandelbrot24.asm):00027         xmax:   .word MAND_XMAX
-1172 FF00             (/mandelbrot24.asm):00028         ymin:   .word MAND_YMIN
-1174 0200             (/mandelbrot24.asm):00029         ymax:   .word MAND_YMAX
-1176 0020             (/mandelbrot24.asm):00030         width:  .word MAND_WIDTH
-1178 0016             (/mandelbrot24.asm):00031         height: .word MAND_HEIGHT
-117A 0F               (/mandelbrot24.asm):00032         maxit:  .byte MAND_MAX_IT
-117B 000000           (/mandelbrot24.asm):00033         res:    .byte 0,0,0
+116B FD80             (/mandelbrot24.asm):00026         xmin:   .word MAND_XMIN
+116D 0380             (/mandelbrot24.asm):00027         xmax:   .word MAND_XMAX
+116F FF00             (/mandelbrot24.asm):00028         ymin:   .word MAND_YMIN
+1171 0200             (/mandelbrot24.asm):00029         ymax:   .word MAND_YMAX
+1173 0020             (/mandelbrot24.asm):00030         width:  .word MAND_WIDTH
+1175 0016             (/mandelbrot24.asm):00031         height: .word MAND_HEIGHT
+1177 0F               (/mandelbrot24.asm):00032         maxit:  .byte MAND_MAX_IT
+1178 000000           (/mandelbrot24.asm):00033         res:    .byte 0,0,0
                       (/mandelbrot24.asm):00034                 
      00E0             (/mandelbrot24.asm):00035         mand_x0:        equ $e0
      00E2             (/mandelbrot24.asm):00036         mand_y0:        equ $e2
@@ -656,112 +671,112 @@
      00EC             (/mandelbrot24.asm):00041         mand_xtemp:     equ $ec
      00EE             (/mandelbrot24.asm):00042         mand_s:         equ $ee
                       (/mandelbrot24.asm):00043                 
-117E                  (/mandelbrot24.asm):00044         mand_get:
+117B                  (/mandelbrot24.asm):00044         mand_get:
                       (/mandelbrot24.asm):00045                 ; Input:
                       (/mandelbrot24.asm):00046                 ;  X,Y - bitmap coordinates
                       (/mandelbrot24.asm):00047                 ; Output: A - # iterations executed (0 to MAND_MAX_IT-1)
-117E CE00FC           (/mandelbrot24.asm):00048                 ldu #FP_T6
-1181 CC0380           (/mandelbrot24.asm):00049                 ldd #MAND_XMAX
-1184 3162             (/mandelbrot24.asm):00050                 leay 2,s
+117B CE00FC           (/mandelbrot24.asm):00048                 ldu #FP_T6
+117E CC0380           (/mandelbrot24.asm):00049                 ldd #MAND_XMAX
+1181 3162             (/mandelbrot24.asm):00050                 leay 2,s
                       (/mandelbrot24.asm):00051                 FP24_MULTIPLY  ; C = A*B
-1186 11AFA4           (    FP24_MULTIPLY):00001                 muld ,y
-1189 E7C4             (    FP24_MULTIPLY):00002                 stb ,u
-118B 10A741           (    FP24_MULTIPLY):00003                 stw 1,u
-118E 108E1176         (/mandelbrot24.asm):00052                 ldy #width
+1183 11AFA4           (    FP24_MULTIPLY):00001                 muld ,y
+1186 E7C4             (    FP24_MULTIPLY):00002                 stb ,u
+1188 10A741           (    FP24_MULTIPLY):00003                 stw 1,u
+118B 108E1173         (/mandelbrot24.asm):00052                 ldy #width
                       (/mandelbrot24.asm):00053                 FP24_DIVIDE
-1192 10EC5F           (      FP24_DIVIDE):00001                 ldq -1,u
-1195 4F               (      FP24_DIVIDE):00002                 clra
-1196 11AEA4           (      FP24_DIVIDE):00003                 divq ,y
-1199 1F60             (      FP24_DIVIDE):00004                 tfr w,d
+118F 10EC5F           (      FP24_DIVIDE):00001                 ldq -1,u
+1192 4F               (      FP24_DIVIDE):00002                 clra
+1193 11AEA4           (      FP24_DIVIDE):00003                 divq ,y
+1196 1F60             (      FP24_DIVIDE):00004                 tfr w,d
                       (/mandelbrot24.asm):00054                 FP_ADD #MAND_XMIN       ; C = A+B (scaled X)
-119B C3FD80           (           FP_ADD):00001                 addd #MAND_XMIN
+1198 C3FD80           (           FP_ADD):00001                 addd #MAND_XMIN
                       (/mandelbrot24.asm):00055                 FP_ST mand_x0    ; x0 = C
-119E DDE0             (            FP_ST):00001                 std mand_x0
+119B DDE0             (            FP_ST):00001                 std mand_x0
                       (/mandelbrot24.asm):00056         
-11A0 CC0200           (/mandelbrot24.asm):00057                 ldd #MAND_YMAX
-11A3 3164             (/mandelbrot24.asm):00058                 leay 4,s
+119D CC0200           (/mandelbrot24.asm):00057                 ldd #MAND_YMAX
+11A0 3164             (/mandelbrot24.asm):00058                 leay 4,s
                       (/mandelbrot24.asm):00059                 FP24_MULTIPLY  ; C = A*B
-11A5 11AFA4           (    FP24_MULTIPLY):00001                 muld ,y
-11A8 E7C4             (    FP24_MULTIPLY):00002                 stb ,u
-11AA 10A741           (    FP24_MULTIPLY):00003                 stw 1,u
-11AD 108E1178         (/mandelbrot24.asm):00060                 ldy #height
+11A2 11AFA4           (    FP24_MULTIPLY):00001                 muld ,y
+11A5 E7C4             (    FP24_MULTIPLY):00002                 stb ,u
+11A7 10A741           (    FP24_MULTIPLY):00003                 stw 1,u
+11AA 108E1175         (/mandelbrot24.asm):00060                 ldy #height
                       (/mandelbrot24.asm):00061                 FP24_DIVIDE
-11B1 10EC5F           (      FP24_DIVIDE):00001                 ldq -1,u
-11B4 4F               (      FP24_DIVIDE):00002                 clra
-11B5 11AEA4           (      FP24_DIVIDE):00003                 divq ,y
-11B8 1F60             (      FP24_DIVIDE):00004                 tfr w,d
+11AE 10EC5F           (      FP24_DIVIDE):00001                 ldq -1,u
+11B1 4F               (      FP24_DIVIDE):00002                 clra
+11B2 11AEA4           (      FP24_DIVIDE):00003                 divq ,y
+11B5 1F60             (      FP24_DIVIDE):00004                 tfr w,d
                       (/mandelbrot24.asm):00062                 FP_ADD #MAND_YMIN       ; C = A+B (scaled Y)
-11BA C3FF00           (           FP_ADD):00001                 addd #MAND_YMIN
+11B7 C3FF00           (           FP_ADD):00001                 addd #MAND_YMIN
                       (/mandelbrot24.asm):00063                 FP_ST mand_y0    ; y0 = C
-11BD DDE2             (            FP_ST):00001                 std mand_y0
+11BA DDE2             (            FP_ST):00001                 std mand_y0
                       (/mandelbrot24.asm):00064         
                       (/mandelbrot24.asm):00065                 endif                   ; divide
-11BF CC0000           (/mandelbrot24.asm):00066                 ldd #0
-11C2 DDE4             (/mandelbrot24.asm):00067                 std mand_x
-11C4 DDE6             (/mandelbrot24.asm):00068                 std mand_y
-11C6 108E0000         (/mandelbrot24.asm):00069                 ldy #0
-11CA                  (/mandelbrot24.asm):00070         @loop:
+11BC CC0000           (/mandelbrot24.asm):00066                 ldd #0
+11BF DDE4             (/mandelbrot24.asm):00067                 std mand_x
+11C1 DDE6             (/mandelbrot24.asm):00068                 std mand_y
+11C3 108E0000         (/mandelbrot24.asm):00069                 ldy #0
+11C7                  (/mandelbrot24.asm):00070         @loop:
                       (/mandelbrot24.asm):00071                 FP_LD mand_x
-11CA DCE4             (            FP_LD):00001                 ldd mand_x
+11C7 DCE4             (            FP_LD):00001                 ldd mand_x
                       (/mandelbrot24.asm):00072                 FP_SQUARE
-11CC DDFA             (        FP_SQUARE):00001                 std FP_RE
-11CE 119FFA           (        FP_SQUARE):00002                 muld FP_RE
-11D1 1F98             (        FP_SQUARE):00003                 tfr b,a
-11D3 1FE9             (        FP_SQUARE):00004                 tfr e,b
+11C9 DDFA             (        FP_SQUARE):00001                 std FP_RE
+11CB 119FFA           (        FP_SQUARE):00002                 muld FP_RE
+11CE 1F98             (        FP_SQUARE):00003                 tfr b,a
+11D0 1FE9             (        FP_SQUARE):00004                 tfr e,b
                       (/mandelbrot24.asm):00073                 FP_ST mand_x2
-11D5 DDE8             (            FP_ST):00001                 std mand_x2
+11D2 DDE8             (            FP_ST):00001                 std mand_x2
                       (/mandelbrot24.asm):00074                 FP_LD mand_y
-11D7 DCE6             (            FP_LD):00001                 ldd mand_y
+11D4 DCE6             (            FP_LD):00001                 ldd mand_y
                       (/mandelbrot24.asm):00075                 FP_SQUARE
-11D9 DDFA             (        FP_SQUARE):00001                 std FP_RE
-11DB 119FFA           (        FP_SQUARE):00002                 muld FP_RE
-11DE 1F98             (        FP_SQUARE):00003                 tfr b,a
-11E0 1FE9             (        FP_SQUARE):00004                 tfr e,b
+11D6 DDFA             (        FP_SQUARE):00001                 std FP_RE
+11D8 119FFA           (        FP_SQUARE):00002                 muld FP_RE
+11DB 1F98             (        FP_SQUARE):00003                 tfr b,a
+11DD 1FE9             (        FP_SQUARE):00004                 tfr e,b
                       (/mandelbrot24.asm):00076                 FP_ST mand_y2
-11E2 DDEA             (            FP_ST):00001                 std mand_y2
+11DF DDEA             (            FP_ST):00001                 std mand_y2
                       (/mandelbrot24.asm):00077                 FP_ADD mand_x2
-11E4 D3E8             (           FP_ADD):00001                 addd mand_x2
+11E1 D3E8             (           FP_ADD):00001                 addd mand_x2
                       (/mandelbrot24.asm):00078                 FP_COMPARE #$0400
-11E6 10830400         (       FP_COMPARE):00001                 cmpd #$0400
-11EA 2E27             (/mandelbrot24.asm):00079                 bgt @dec_i
+11E3 10830400         (       FP_COMPARE):00001                 cmpd #$0400
+11E7 2E27             (/mandelbrot24.asm):00079                 bgt @dec_i
                       (/mandelbrot24.asm):00080                 ;; find xtemp
                       (/mandelbrot24.asm):00081                 FP_LD mand_x2
-11EC DCE8             (            FP_LD):00001                 ldd mand_x2
+11E9 DCE8             (            FP_LD):00001                 ldd mand_x2
                       (/mandelbrot24.asm):00082                 FP_SUBTRACT mand_y2     ; X^2 - Y^2
-11EE 93EA             (      FP_SUBTRACT):00001                 subd mand_y2
+11EB 93EA             (      FP_SUBTRACT):00001                 subd mand_y2
                       (/mandelbrot24.asm):00083                 FP_ADD mand_x0       ; X^2 - Y^2 + X0
-11F0 D3E0             (           FP_ADD):00001                 addd mand_x0
+11ED D3E0             (           FP_ADD):00001                 addd mand_x0
                       (/mandelbrot24.asm):00084                 FP_ST mand_xtemp ; Xtemp
-11F2 DDEC             (            FP_ST):00001                 std mand_xtemp
+11EF DDEC             (            FP_ST):00001                 std mand_xtemp
                       (/mandelbrot24.asm):00085                 ;; find y
                       (/mandelbrot24.asm):00086                 FP_LD mand_x     ;  X
-11F4 DCE4             (            FP_LD):00001                 ldd mand_x
+11F1 DCE4             (            FP_LD):00001                 ldd mand_x
                       (/mandelbrot24.asm):00087                 FP_MUL2          ; 2*X
-11F6 58               (          FP_MUL2):00001                 aslb
-11F7 49               (          FP_MUL2):00002                 rola
+11F3 58               (          FP_MUL2):00001                 aslb
+11F4 49               (          FP_MUL2):00002                 rola
                       (/mandelbrot24.asm):00088                 fp_multiply mand_y  ; 2*X*Y
-11F8 119FE6           (      fp_multiply):00001                 muld mand_y
-11FB 1F98             (      fp_multiply):00002                 tfr b,a
-11FD 1FE9             (      fp_multiply):00003                 tfr e,b
+11F5 119FE6           (      fp_multiply):00001                 muld mand_y
+11F8 1F98             (      fp_multiply):00002                 tfr b,a
+11FA 1FE9             (      fp_multiply):00003                 tfr e,b
                       (/mandelbrot24.asm):00089                 FP_ADD mand_y0        ; 2*X*Y + Y0
-11FF D3E2             (           FP_ADD):00001                 addd mand_y0
+11FC D3E2             (           FP_ADD):00001                 addd mand_y0
                       (/mandelbrot24.asm):00090                 FP_ST mand_y     ; Y = C (2*X*Y + Y0)
-1201 DDE6             (            FP_ST):00001                 std mand_y
+11FE DDE6             (            FP_ST):00001                 std mand_y
                       (/mandelbrot24.asm):00091                 FP_LD mand_xtemp
-1203 DCEC             (            FP_LD):00001                 ldd mand_xtemp
+1200 DCEC             (            FP_LD):00001                 ldd mand_xtemp
                       (/mandelbrot24.asm):00092                 FP_ST mand_x
-1205 DDE4             (            FP_ST):00001                 std mand_x
-1207 96FE             (/mandelbrot24.asm):00093                 lda FP_T7
-1209 3121             (/mandelbrot24.asm):00094                 leay 1,y
-120B 97FE             (/mandelbrot24.asm):00095                 sta FP_T7
-120D 108C000F         (/mandelbrot24.asm):00096                 cmpy #MAND_MAX_IT
-1211 26B7             (/mandelbrot24.asm):00097                 bne @loop
-1213                  (/mandelbrot24.asm):00098         @dec_i:
-1213 96FE             (/mandelbrot24.asm):00099                 lda FP_T7
-1215 1F20             (/mandelbrot24.asm):00100                 tfr y,d
-1217 5A               (/mandelbrot24.asm):00101                 decb
-1218 E766             (/mandelbrot24.asm):00102                 stb 6,s
-121A 39               (/mandelbrot24.asm):00103                 rts
-                      (      hb-mand.asm):00123         
-                      (      hb-mand.asm):00124                 ORG $FFF8     ; set interupt vector for IRQ to ISR
-FFF8 1080             (      hb-mand.asm):00125                 FDB ISR
+1202 DDE4             (            FP_ST):00001                 std mand_x
+1204 96FE             (/mandelbrot24.asm):00093                 lda FP_T7
+1206 3121             (/mandelbrot24.asm):00094                 leay 1,y
+1208 97FE             (/mandelbrot24.asm):00095                 sta FP_T7
+120A 108C000F         (/mandelbrot24.asm):00096                 cmpy #MAND_MAX_IT
+120E 26B7             (/mandelbrot24.asm):00097                 bne @loop
+1210                  (/mandelbrot24.asm):00098         @dec_i:
+1210 96FE             (/mandelbrot24.asm):00099                 lda FP_T7
+1212 1F20             (/mandelbrot24.asm):00100                 tfr y,d
+1214 5A               (/mandelbrot24.asm):00101                 decb
+1215 E766             (/mandelbrot24.asm):00102                 stb 6,s
+1217 39               (/mandelbrot24.asm):00103                 rts
+                      (      hb-mand.asm):00138         
+                      (      hb-mand.asm):00139                 ORG $FFF8     ; set interupt vector for IRQ to ISR
+FFF8 1079             (      hb-mand.asm):00140                 FDB ISR

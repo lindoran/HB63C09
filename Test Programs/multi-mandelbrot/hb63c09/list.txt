@@ -1,0 +1,23 @@
+                      (         test.asm):00001         ; timer testing
+     A03B             (         test.asm):00002         TCTRL   EQU     $A03B
+                      (         test.asm):00003         
+                      (         test.asm):00004         
+                      (         test.asm):00005         
+                      (         test.asm):00006         
+                      (         test.asm):00007                 ORG     $1000
+                      (         test.asm):00008          
+1000 1CEF             (         test.asm):00009                 ANDCC   #$EF            ; enable interupts from IRQ line (6309)
+1002 8601             (         test.asm):00010                 LDA     #1              ; set bit 1
+1004 B7A03B           (         test.asm):00011                 STA     TCTRL           ; start timer interupts
+1007 6E9FFFFE         (         test.asm):00012                 JMP     [$FFFE]         ; Jump to reset vector
+                      (         test.asm):00013         
+100B                  (         test.asm):00014         ISR:
+                      (         test.asm):00015                 ;; end early if we need to to save so many cycles!!
+                      (         test.asm):00016                 ;; we are going to do very small incriments
+100B B6A03B           (         test.asm):00017                 LDA     TCTRL           ; clear the interupt
+100E 3B               (         test.asm):00018                 RTI
+                      (         test.asm):00019         
+                      (         test.asm):00020         ; set interupt vector
+                      (         test.asm):00021         
+                      (         test.asm):00022                 ORG $FFF8     ; set interupt vector for IRQ to ISR
+FFF8 100B             (         test.asm):00023                 FDB ISR

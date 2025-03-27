@@ -64,6 +64,8 @@ WARNING!!!
 
 #define F_CPU 20000000UL // may not be needed but we need to be sure board is 20Mhz
 
+  
+
 #define DO_TWICE_NOP() \
 do { \
     __asm__ __volatile__ ("nop\n\t"); \
@@ -113,12 +115,14 @@ uint8_t  ustatus = 0;                 // this is the current 6850 Wrapper status
 uint8_t  rxIntEn = 0;                 // enable interupts on RDRF
 uint8_t  txIntEn = 0;                 // enable interupts on TDRE
 uint8_t  tmIntEn = 0;                 // enable timer interupts
-uint32_t curTime = 0;                 // last known time.
-uint32_t timerThreshold = 0;          // max value is default.
+uint16_t curTime = 0;                 // holding variable for timer
+uint8_t  sTickTime = 10;              // default systick is 10 ms
+unsigned long  uSStamp = micros();    // holds the last microsecond time stamp
 uint8_t  tStatus = 0;                 // timer Status Register
 uint8_t  tControl = 0;                // Timer Control register.
 uint8_t  intRegister = 0;             // this register contains the status of interupt generation, this is used only by the interupt handler
 
+ 
 volatile uint16_t timerCounts;
 uint8_t prescalerBits = 0;
 
@@ -132,6 +136,7 @@ uint16_t trackSel;                    // Store the current track number [0..511]
 uint8_t  sectSel;                     // Store the current sector number [0..31]
 uint8_t  diskErr = 19;                // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
                                       //  error code
+uint16_t SectSize = 511;              // This is the size of the sectoring for the given media default is 512 can be set to 256 
 uint8_t  numWriBytes;                 // Number of written bytes after a writeSD() call
 uint8_t  diskSet = 0;                 // Current "Disk Set"  -- since subdirectories all disk sets are 0, each system rom will have it's own disk sets.
 
@@ -279,26 +284,11 @@ Serial.println(F("HD63C09 is now on the bus..."));
 // Lets burn this candle! -- System coming out of reset state
 // these two have external pull ups- setting the lines on the arduino to inputs effectively tri-states the link between the two chips
 
+//Timer1_init();   // start the timer at 10ms / 100hz with 6309 interupts disabled.
+
 bitClear(DDRB, RES_);
 bitClear(DDRB, HALT_);
 
-}
-
-// Timer Interupt generation
-ISR(TIMER1_OVF_vect) {
-    // set registers
-    if (tmIntEn) {
-      bitSet(intRegister, 2); // Set the timer interrupt bit, set limit reached
-      bitSet(tStatus, 7);     // Set the timer status interrupt bit
-      
-    } else {
-      bitClear(intRegister, 2); // no interupts make shure it is clear
-    }
-    
-    intHandler();               // Handle the interupt generation for the 63C09
-    
-    // Reload the timer for the next interrupt
-    TCNT1 = 65536 - timerCounts;
 }
 
 // Main loop
@@ -334,7 +324,20 @@ void loop(){
       }
       else bitClear(intRegister,1);
   }
-
+  //systic simulator -- this is Fabio's method for building a interval timer. 
+  //Quick simple and efective. this was lifted almsot verbatem from Z80-MBC Code.
+  //See atribution. 
+  
+  if(tmIntEn) {
+    if ((micros() - uSStamp) > ((long unsigned) (sTickTime) * 1000)) {
+      bitSet(intRegister, 2);   // interupt set the status bit
+      bitSet(tStatus, 0);
+      uSStamp = micros();       // seed the systick timer
+    }
+  } else {        // just clear the int status bit
+    bitClear(tStatus, 0);
+  }
+  
   //interupt handler 
   intHandler();  // checks to see if the intRegister is clear '0' and if so clears the interupt.
   
@@ -360,8 +363,7 @@ void loop(){
         *   0xA005    - WRITESECT* - Write a Sector to the Disk (512 bytes in sequence) 
         *   ...
         *   0xA03B    - TIMRCNT    - Timer Control Register
-        *   0xA03C    - SETTMSB    - Most Significant byte set point for timer.
-        *   0xA03D    - SETTLSB    - Least Significant byte set point for timer. 
+        *   0xA03B    - SETTICK*   - Set the system Tick Timer in msec, default is 10 msec.  
         *   0xA03E    - LOADERR    - This is the loader register, it is unlocked by writing 255 after boot up.
         *   0xA03F    - SETBANK    - Write the low nibble (3 bits) on the data bus to the bank register
         *  
@@ -597,11 +599,11 @@ void loop(){
                 {
                   diskErr = writeSD(bufferSD, &numWriBytes);
                   if (numWriBytes < 32) diskErr = 19; // Reached an unexpected EOF
-                  if (ioByteCnt >= 511)
+                  if (ioByteCnt >= SectSize)
                   // Finalize write operation and check result (if no previous error occurred)
                   {
                     if (!diskErr) diskErr = writeSD(NULL, &numWriBytes);
-                   
+                    curOp = 255;    // asure ioByteCnt resets cleanly.
                   }
                 }
               }
@@ -615,85 +617,44 @@ void loop(){
               *  
               *               I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0  
               *                          ---------------------------------------------------------  
-              *                            0  X  X  X  X  X  X  X    Timer interrupts disabled  
-              *                            1  X  X  X  X  X  X  X    Timer interrupts enabled  
+              *                          
+              *                                       ...            D1 - D7 are future use, write 0's  
+              *                            
+              *                            X  X  X  X  X  X  X  0    Timer interrupts disabled  
+              *                            X  X  X  X  X  X  X  1    Timer interrupts enabled  
+              *   
               *  
-              *                                       ...            D6 - D2 are future use, write 0's  
-              *  
-              *                            X  X  X  X  X  X  0  X    Timer not reset  
-              *                            X  X  X  X  X  X  1  X    Timer reset to 0 (Auto-clear)  
-              *                            X  X  X  X  X  X  X  0    Timer stopped (Interrupts disabled, final value retained)  
-              *                            X  X  X  X  X  X  X  1    Timer started  
+              *                        
               *  
               * DESCRIPTION:  
-              * - Bit 0: Controls the timer. Setting to 1 starts the timer, clearing it stops the timer and disables interrupts.  
-              * - Bit 1: Resets the timer when set. This bit clears itself automatically after execution.  
-              * - Bit 7: Enables (1) or disables (0) timer-generated interrupts.  
-              *  
-              * NOTES:  
-              * - The timer must be started (Bit 0 = 1) for interrupts to occur if enabled (Bit 7 = 1).  
-              * - Reserved bits (D6-D2) must always be written as 0 for future compatibility.  
-              * 
+              * - Bit 0: Controls interupts, (1) enables interputs or (0) disables interupts   
               */
 
               // Set the control register to the bus data
               tControl = busData;
 
-              // Stop timer if running
-              if (!bitRead(tControl, 0) && bitRead(tStatus, 0)) {
-                Timer1_Stop();
-                curTime = TCNT1;
-                tmIntEn = 0; // Disable interrupts
-                bitClear(tStatus, 0);  // Clear timer running flag
-              }
-
-               // Start timer if not already running
-              if (bitRead(tControl, 0) && !bitRead(tStatus, 0)) {
-                Timer1_Start();
-                bitSet(tStatus, 0);  // set timer is running
-              }
-
-              // Reset timer if requested, while running. while stopped, its not super useful. 
-              if (bitRead(tControl, 1)) {
-                Timer1_Start();
-                bitClear(tControl, 1);
-                bitSet(tStatus, 0);
-              }
-              
               // Enable or disable timer interrupts
-              tmIntEn = bitRead(tControl, 7);
-
-              
-
+              tmIntEn = bitRead(tControl, 0);
 
              break;
-             
+            
+           
              case 0x3C:
-             // SETTMSB
-             // Set Timer MSB, however both bytes need to be written to store a value MSB first then LSB
-             // Usage: sets the Threshold for the timer rollover when timer is stopped in 1 16 bit operation
+             // Set Sys tick timer 
+             // SETTICK - set the Systick timer time (milliseconds)
+             //
+             //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
+             //                            ---------------------------------------------------------
+             //                             D7 D6 D5 D4 D3 D2 D1 D0    Systick time (binary) [1..255]
+             //
+             // Set/change the time (millisecond) used for the Systick timer.
+             // At reset time the default value is 10ms.
+             // See SETIRQ and SYSIRQ Opcodes for more info.
+             //
+             // NOTE: If the time is 0 milliseconds the set operation is ignored.
+  
+             if (busData >0 ) sTickTime = busData;
              
-             tempByte = busData; // save for later
-             bitSet(tStatus, 1); // High Byte Set and waiting
-
-             break;
-
-             case 0x3D:
-             // SETTLSB
-             // Set the LSB based on whether the MSB was already written. 
-             // If the MSB was written, both MSB and LSB are combined to form a 16-bit value.
-             // If only the LSB is written, the timer threshold is updated with the LSB only.
-             
-             if (bitRead(tStatus, 1) && !bitRead(tStatus,0)) { 
-               timerThreshold = tempByte << 8; // set MSB
-               timerThreshold |= busData; // set LSB 
-               bitClear(tStatus,1); // operation complete
-             } 
-             else if (!bitRead(tStatus,0)) {
-              timerThreshold = busData; // set LSB
-             }
-             Timer1_Init(timerThreshold, false);  // init the timer but do not start
-
              break;
              
              case 0x3E:
@@ -706,6 +667,8 @@ void loop(){
                *  |     01        |  Resets only the 6309, this will not reset the AVR      |
                *  +---------------+---------------------------------------------------------+
                *  |     02        |  halts the 6309, remains halted until next sys_reset    |
+               *  +---------------+---------------------------------------------------------+
+               *  |     03        |  Toggles sector size between 256 and 512                |
                *  +---------------+---------------------------------------------------------+
                *  |               |  Unlocks the Loader enviornment for the above, or to    |
                *  |     FF        | stage the computer. (see read operation 0x03E)          |
@@ -737,7 +700,18 @@ void loop(){
 
                   } 
                   break;
-
+                case 0x03:
+                  // toggle sector size between 256 and 512
+                 if (loaderReg == 0xFF) {
+                    if (SectSize == 511) SectSize = 255;
+                     else SectSize == 511;
+                     loaderReg = 0;
+                 } else { 
+                   loaderReg = 0;
+                  
+                 }
+                  break;
+                 
                 case 0xff:
                   //unlock the register
                   loaderReg = 0xFF;
@@ -877,8 +851,8 @@ void loop(){
                  // Sector and track numbers valid and no previous error; set the LBA-like logical sector
                  {
                   diskErr = seekSD((trackSel << 5) | sectSel);  // Set the starting point inside the "disk file"
-                                                              //  generating a 14 bit "disk file" LBA-like 
-                                                              //  logical sector address created as TTTTTTTTTSSSSS
+                                                                //  generating a 14 bit "disk file" LBA-like 
+                                                                //  logical sector address created as TTTTTTTTTSSSSS
                  }
                }
                if (!diskErr)
@@ -891,9 +865,12 @@ void loop(){
                    diskErr = readSD(bufferSD, &numReadBytes); 
                    if (numReadBytes < 32) diskErr = 19;    // Reached an unexpected EOF
                  }
-                 if (!diskErr) busData = bufferSD[tempByte];// If no errors, exchange current data byte with the CPU
+                 if (!diskErr) busData = bufferSD[tempByte];// If no errors, exchange current data byte with the CPU 
                }
-               
+               if (ioByteCnt >= SectSize) 
+               {
+                 curOp = 255;                      // All done. Set ioOpcode = "No operation"
+               }
                ioByteCnt++;                        // Increment the counter of the exchanged data bytes
                break;
 
@@ -923,66 +900,71 @@ void loop(){
                 *  
                 *               I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0  
                 *                          ---------------------------------------------------------  
-                *                            0  X  X  X  X  X  X  X    Timer interrupt cleared  
-                *                            1  X  X  X  X  X  X  X    Timer interrupt enabled  
+                *                          
+                *                                     ....             bits D1 - D7 are Future use
+                *                          
+                *                            X  X  X  X  X  X  X  0    Timer interrupt cleared (high)  
+                *                            X  X  X  X  X  X  X  1    Timer interrupt active (low)  
                 *  
-                *                                       ...            D6 - D3 are future use  
+                *                                     
                 *  
-                *                            X  X  X  X  X  0  X  X    16 Bit Read Not in progress
-                *                            X  X  X  X  X  1  X  X    16 Bit Read in progress
-                *                            X  X  X  X  X  X  0  X    16 Bit Write High Byte Not Set 
-                *                            X  X  X  X  X  X  1  X    16 Bit Write High Byte Set
-                *                            X  X  X  X  X  X  X  0    Timer is stoped   
-                *                            X  X  X  X  X  X  X  1    Timer is running  
-                *  
+                *                           
                 * DESCRIPTION:  
-                * - Bit 0: shows when timer is running 
-                * - Bit 1: shows when the high byte is set (1) or not set (0) for the limit
-                * - Bit 2: shows if a 16 bit Read is in progress (1) or not (0) of the timer.
-                * - Bit 7: Interrupt status for timer-generated interrupts (1 for interrupt, 0 for no interrupt).  
-                *  
-                * NOTES:  
-                * - The timer must be started (Bit 0 = 1) for interrupts to occur if enabled (Bit 7 = 1 on
-                *   control register).  
-                *  
-                * 
+                * - Bit 0: shows when an interupt is active, resets interupt flag when read and clears interupt
+                *
                 */
               
                 busData = tStatus;
-                bitClear(tStatus, 7); // clear interupt status bit, when checked
+                bitClear(tStatus, 0); // clear interupt status bit, when checked
                 bitClear(intRegister, 2); // clear the interupt
                 intHandler();
 
               break;
+
               
               case 0x3C:
+              // SAMPTICK
+              // sample the systick timer, may be useful for retry counter, psudonumber generation etc... 
+              // will be a number from 0 - sTickTime. 
               
-               // RTIMRMS - Read Timer Most Significant Byte. 
-               // Determines when the timer is sampled, based on whether the timer is running or stopped.
-               // If the timer is running, get the most up-to-date time.
-             
-              if (bitRead(tControl, 0))   // Timer is running
-               curTime = TCNT1;
-                
-              busData = curTime >> 8;  // Get the MSB
-              bitSet(tStatus, 2); // 16-bit read operation is in progress
-
+              busData = (unsigned byte) (micros() - uSStamp) / 1000;  
+               
+               
               break;
-
-              
               case 0x3D:
-               
-               // RTIMRLS - Read Timer Least Significant Byte.
-               // If the timer is running and no 16-bit read has occurred, sample the timer.
-               // If the high byte has already been read, just use the current value for the LSB.
-             
-               if (bitRead(tControl, 0) && !bitRead(tStatus, 2)) 
-                curTime = TCNT1;
+               /* SYSTAT
+                * System status register
+                * Shows the status of the internal register sets
+                * 
+                *               I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0  
+                *                          ---------------------------------------------------------  
+                *                          
+                *                                     ....             bits D5 - D7 are Future use
+                *                                     
+                *                            X  X  X  0  X  X  X  X    Loader Register is locked       
+                *                            X  X  X  1  X  X  X  X    Loader Register is unlocked
+                *                            X  X  X  X  0  X  X  X    Sectoring is 512 bytes           
+                *                            X  X  X  X  1  X  X  X    Sectoring is 256 bytes
+                *                            X  X  X  X  X  0  X  X    TX interupt unset          
+                *                            X  X  X  X  X  1  X  X    TX interupt set          
+                *                            X  X  X  X  X  X  0  X    RX interupt unset 
+                *                            X  X  X  X  X  X  1  X    RX interupt set
+                *                            X  X  X  X  X  X  X  0    Timer interrupt unset  
+                *                            X  X  X  X  X  X  X  1    Timer interrupts set  
+                * 
+                *  
+                *                                     
+                */
                 
-               busData = curTime & 0xFF; // get the LSB
-               bitClear(tStatus, 2); 
-               
-              break;
+                busData = 0;   // reset bus data
+                if (loaderReg == 255) bitSet(busData, 4);
+                if (SectSize == 255) bitSet(busData, 3);
+                if (txIntEn) bitSet(busData,2);
+                if (rxIntEn) bitSet(busData,1);
+                if (tmIntEn) bitSet(busData,0);
+
+                break;
+                   
                 
               case 0x3E:
                 // LOADER
@@ -1030,13 +1012,13 @@ void loop(){
                   if  ((ioByteCnt > (biosSize+4)) && ( loaderReg = 255) ) { 
                     // we are done loading the data and must reset or the computer will hang.
                     loaderReg = 0; // re-lock the loader
-                    lastOp = 255;  // reset last op (this value makes certain a new operation is initiated.)
-                    busIO();       // send the cpu back to run mode
+                    curOp = 255;   // reset last op (this value makes certain a new operation is initiated.)
+                    
                     
                     // quickly select first LBA volume on boot.
                     buildFilePath(curPath, diskName);
                     Serial.println(F("LOADER: Finished bootstrap"));
-                    Serial.printf("IOS: Setting disk to %s ...",filePath);
+                    Serial.printf("IOS: Setting disk to %s ...\r\n",filePath);
                     diskErr = openSD(filePath);       // open the first LBA Volume in the selected ROM directory.
                     bitSet(DDRB, RES_);
                     bitClear(DDRB, RES_); // reset
@@ -1070,58 +1052,6 @@ void loop(){
 
 // init timer routine 
 
-void Timer1_Init(uint32_t tLimit, bool enable) {
-    uint32_t timerTick;
-    uint16_t prescalerValue = 0;
-
-    // Array of possible prescalers and their corresponding bits in TCCR1B
-    uint16_t prescalers[] = {1, 8, 64, 256, 1024};
-    uint8_t prescalerBitsArray[] = {0x01, 0x02, 0x03, 0x04, 0x05};
-
-    // Find suitable prescaler
-    for(uint8_t i = 0; i < 5; i++) {
-        timerTick = F_CPU / prescalers[i];
-        timerCounts = (timerTick * tLimit) / 1000;
-
-        if(timerCounts <= 65535) {
-            prescalerValue = prescalers[i];
-            prescalerBits = prescalerBitsArray[i];
-            break;
-        }
-    }
-
-    if(prescalerValue == 0) {
-        // tLimit is too large even with the highest prescaler
-        // Handle error accordingly
-    }
-
-    // Set Timer1 count for the calculated delay
-    TCNT1 = 65536 - timerCounts;
-
-    // Configure Timer1 Control Registers
-    TCCR1A = 0x00;            // Normal mode
-    TIMSK |= (1 << TOIE1);    // Enable Timer1 overflow interrupt
-
-    if(enable) {
-        TCCR1B = prescalerBits;   // Start the timer
-    } else {
-        TCCR1B = 0x00;            // Stop the timer
-    }
-
-    sei(); // Enable global interrupts
-}
-
-// generic start routine 
-void Timer1_Start() {
-    TCNT1 = 65536 - timerCounts; // Reset timer count
-    TCCR1B = prescalerBits;      // Start the timer
-}
-
-// generic stop routine 
-void Timer1_Stop() {
-    TCCR1B = 0x00;               // Stop the timer
-}
-
 
 // handle interupts
 void intHandler(void) {
@@ -1149,12 +1079,12 @@ void busWrite(uint8_t data) {
 
 //end the current io request
 void busIO(void) {
-      noInterrupts();  // this next bit is very timing sensitive.
+      cli();  // we need to disable the interupt register for 2 timing sensitive bit flips 
       // send bgnt_
       bitClear(PORTD, IOGNT_);    // this ends the io request - cpu is free running from this point 
       bitSet(PORTD, IOGNT_);      // the current cycle is ended - we need to restore this as the address bus is building
       busTstate(); // this just makes sure we are ready to read on the next go-through.
-      interrupts();  // back to it
+      sei();  // back to it
 }
 
 // this is for configuring the address bus pins.

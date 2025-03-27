@@ -5,6 +5,12 @@ These Files are test programs for loading with srec (s19) or iHex (hex) into a s
 BBCBROT.BAS -   a simple color ascii mandelbrot plot for BBC Basic.
 </pre>
 
+<pre>
+multi-mandelbrot - a ascii mandelbrot program, the msec counter is horendusly broken
+                   at the moment.   but it works.  just G 1000 to start once loaded 
+
+</pre>
+
 
 <pre>
 hello.asm   -   simple hello world program, you can compile it with:  
