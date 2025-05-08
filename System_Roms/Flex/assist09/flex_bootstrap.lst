@@ -1,0 +1,88 @@
+                      ;This is the flex boostrap LOADER program for the HB63C09M.
+                      ;this simply switches to the first sector of the volume 00 and loads 256 bytes
+                      ;at track 0, sector 1. Since this is HB63C09 "aware" its refrenceing track 1 as 
+                      ;0 as the controller uses 0 and not 1 to refrence the first sector on the track.
+                      
+0000                          INCLUDE "./console.sym"
+A011                  NULL    equ     40977
+A000                  ACIA    equ     40960
+D3F5                  TINIT   equ     54261
+D3F7                  STAT    equ     54263
+D370                  TRINIT  equ     54128
+D399                  TINT    equ     54169
+D3F1                  TMINT   equ     54257
+D3FB                  INCH    equ     54267
+D371                  INNECH  equ     54129
+D382                  OTCHR2  equ     54146
+D38F                  STATUS  equ     54159
+D3F9                  OUTCH   equ     54265
+D3F3                  MONITR  equ     54259
+D37E                  INCHR   equ     54142
+D380                  OTCHR   equ     54144
+D3E7                  IHNDLR  equ     54247
+D399                  TOFF    equ     54169
+D3ED                  TMOFF   equ     54253
+D3E5                  INCHNE  equ     54245
+D39A                  IHND    equ     54170
+F837                  MON09   equ     63543
+D3EB                  IRQVEC  equ     54251
+D3EF                  TMON    equ     54255
+D399                  TON     equ     54169
+D3E9                  SWIVEC  equ     54249
+                      
+                      ;equates
+                      
+A006                  FLPSEL          EQU     $A006                   ;Select a floppy
+A007                  FLPTRK          EQU     FLPSEL+1                ;Select a track
+A008                  FLPSEC          EQU     FLPSEL+2                ;select a sector
+A009                  FLPREA          EQU     FLPSEL+3                ;read a sector
+A00A                  FLPSTA          EQU     FLPSEL+4                ;read floppy status register
+                      
+                      
+C100                  LDAREA          EQU     $C100                   ; LOAD THE BOOTSTRAP TO HERE.
+                      
+                      ; rom code starts here: 
+                      
+F700                                  ORG     $F700                   ; JUST ABOVE THE FLEX OS IN RAM AREA
+                      
+                      
+                      
+F700  4F              STRAP           CLRA                            ; load zero to zero out the drive location
+F701  B7A006                          STA     FLPSEL                  ; select drive 0
+F704  B7A008                          STA     FLPSEC                  ; select sector 1, loads 0 which the controller expects for 1
+F707  B7A007                          STA     FLPTRK                  ; select track 0
+F70A  F6A00A                          LDB     FLPSTA                  ; CHECK FOR ERRORS
+F70D  2611                            BNE     STRAP2                  ; IF THERE WAS AN ERROR JUMP.
+                      
+                      ;; DRIVE AND LOACITON CORRECTLY SEEKED TO 
+                      
+F70F  5F                              CLRB                            ; START COUNT FOR SECTOR READ
+F710  8EC100                          LDX     #LDAREA                 ; LOCATION TO STORE BOOT PROGRAM TO.
+F713  B6A009          STRAP1          LDA     FLPREA                  ; READ A BYTE
+F716  A780                            STA     ,X+                     ; STORE IT AND INC INDEX
+F718  5A                              DECB                            ; INCREMENT THE COUNTER
+F719  26F8                            BNE     STRAP1                  ; LOOP BACK IF NOT ZERO
+F71B  B6A00A                          LDA     FLPSTA                  ; CHECK FOR ERRORS
+F71E  2709                            BEQ     STRAP3                  ; IF NO ERRORS FINISH
+F720  8EF73C          STRAP2          LDX     #ESTRING                ; PRINT THE ERROR STRING
+F723  8D0C                            BSR     ERPR                    ; PRINT THE ERROR
+F725  6E9FD3F3                        JMP     [MONITR]                ; jump to assist09 
+                      
+F729                  STRAP3          
+F729  8EF75D                          LDX     #SSTRING
+F72C  8D03                            BSR     ERPR                    ; print the succsess string
+                                      
+F72E  7EC100                          JMP     LDAREA                  ; BOOT FLEX FROM DISK.
+                      
+                      
+F731  A680            ERPR            LDA     ,X+                     ; get character from string
+F733  2706                            BEQ     DONE
+F735  AD9FD3F9                        JSR     [OUTCH]                 ; Send the character
+F739  20F6                            BRA     ERPR                    ; keep printing
+F73B  39              DONE            RTS                             
+                      
+F73C  464C45583A204572726F722C206D65646961206E6F74206C6F6164696E67 ESTRING         FCC     "FLEX: Error, media not loading"
+F75A  0D0A00                          FCB     $0D,$0A,$00
+                      
+F75D  464C45583A20426F6F7420536563746F72204C6F61646564 SSTRING         FCC     "FLEX: Boot Sector Loaded"
+F775  0D0A00                          FCB     $0D,$0A,$00     

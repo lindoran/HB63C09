@@ -1,0 +1,177 @@
+;; TEST UTILITY 
+
+;;(C) 1980
+;;Technical Systmems Consultants, Inc.
+;;AS FOUND IN 6809 FLEX adaptation guide
+;;See Full guide for info
+
+
+;; tests single sector read / write, prompts user for input
+
+;;EQUATES
+
+INCH	EQU	$D3FB
+OUTCH	EQU	$D3F9
+TINIT	EQU	$D3F5
+MONITR	EQU	$D3F3
+STACK	EQU	$C07F
+FCB	EQU	$C840
+BUFFER	EQU	$1000
+READ	EQU	$DE00
+WRITE	EQU	$DE03
+DRIVE	EQU	$DE0C
+
+;; TEMP STORAGE
+	ORG	$20
+COMMAND	RMB	1
+TRACK	RMB	1
+SECTOR	RMB	1
+
+;; start of program
+	ORG	$100	
+
+TEST	LDS	#STACK		; STACK SETUP
+	JSR	[TINIT]		; init terminal
+	JSR	$DE15		; INT DRIVE
+TEST1	LDS	#STACK		; reset stack 
+	BSR	PCRLF		
+	LDA	#'F'		; Prompt for function
+	BSR	PROMPT		
+	BSR	INPUT		; GET RESPONSE
+	CMPA	#'R'		; Read Command
+	BEQ	TEST2		; 
+	CMPA	#'W'		; write command
+	BEQ	TEST2		
+	JMP	[MONITR]	; EXIT THE PROGRAM
+TEST2	STA	COMMAND		; SAVE THE COMMAND
+	LDA	#'D'		; PROMPT FOR DRIVE
+	BSR	PROMPT		; 
+	JSR	INHEX		; GET RESPONSE
+	CMPA	#4		; ENSURE its 0 to 3
+	BHS	TEST1		
+	STA	FCB+3		; SAVE it
+	LDA	#'T'		; PROMPT FOR TRACK
+	BSR	HPRMPT		; GET HEX PROMPT
+	STA	TRACK		
+	LDA	#'S'		; prompt for Sector
+	BSR	HPRMPT		; GET HEX PROMT
+	STA	SECTOR		; SAVE IT
+	BSR	PCRLF		; DO LINE FEED
+
+;; GOT COMMAND, NOW DO IT
+
+	LDA	COMMAND		; GET COMMAND
+	CMPA	#'W'		; A WRITE COMMAND?
+	BNE	DOREAD		; if not, its read
+	BSR	SELECT		; SELLECT DRIVE
+	LDX	#BUFFER		; point to buffer
+	LDD	TRACK		; POINT TO track and sector
+	JSR	WRITE		; WRITE THE DATA
+	BNE	ERROR		
+	BSR	PCRLF		
+	LDA	#'O'		; PRINT OK
+	BSR	OUTPUT		
+	LDA	#'K'	
+	BSR	OUTPUT
+	BRA	TEST1		; DO AGAIN
+
+;; PROMPT ROUTINES
+
+PROMPT	BSR	PCRLF		; DO LINEFEED
+	BSR	OUTPUT		; OUTPUT PROMT LETTER
+	BRA	QUEST		; PRINT QUESTION MARK
+HPRMPT	BSR	PROMPT		; DO PROMPT
+	BRA	INBYTE		; get Hex byte
+
+PCRLF	PSHS	A		; save 'a'
+	LDA	#$0D		; RETURN
+	BSR	OUTPUT		
+	LDA	#$0A		; LINE FEED
+	BSR	OUTPUT		
+	PULS	A		; restore 'a'
+RET	RTS	
+
+;; io routines
+
+INPUT	JMP	[INCH]
+QUEST	LDA	#'?'
+OUTPUT	JMP	[OUTCH]
+
+; drive select
+
+SELECT	LDX	#FCB
+	JSR	DRIVE
+	BEQ	RET
+
+; drive error
+ERROR	BSR	PCRLF
+	LDA	#'E'
+	BSR	OUTPUT
+	LDA	#'='
+	BSR	OUTPUT
+	TFR	B,A		; GET ERROR CODE
+	BSR	OUTHEX			
+	LBRA	TEST1		;START OVER
+
+DOREAD	BSR	SELECT		; SELECT DRIVE
+	LDX	#BUFFER		;point to buffer
+	LDD	TRACK		; point to track and sector
+	JSR	READ		; READ THE DATA
+	BNE	ERROR		
+
+;; dump data to console 
+
+	LDX	#BUFFER		
+	LDA	#16		; NO of LINES
+DUMP1	PSHS	A		; save no of lines
+	BSR	PCRLF		
+	LDB	#16		; no of bytes
+DUMP2	LDA	,X+		; GET a byte
+	BSR	OUTHEX		; output it
+	DECB			; done with line?
+	BNE	DUMP2		
+	PULS	A		; get num lines 
+	DECA			; done with dump
+	BNE	DUMP1		; loop if not
+	LBRA	TEST1		; get next command
+
+INBYTE	BSR	INHEX		
+	ASLA			; multiply by 16
+	ASLA
+	ASLA
+	ASLA
+	PSHS	A		; Save 'A'
+	BSR	INHEX
+	ADDA	,S+		
+RETN	RTS			
+
+INHEX	BSR	INPUT		
+	SUBA	#$47
+	BPL	INERR
+	ADDA	#6
+	BPL	INH2
+	ADDA 	#7
+	BPL	INERR
+INH2	ADDA	#10
+	BPL	RETN
+INERR	BSR	QUEST		;print question
+	LBRA	TEST1		;go start over
+
+OUTHEX	PSHS	A
+	LSRA	
+	LSRA	
+	LSRA	
+	LSRA
+	BSR	OUTHR
+	PULS	A
+	BSR	OUTHR
+	LDA	#$20
+	BRA	OUTPUT
+OUTHR	ANDA	#$0F
+	ADDA	#$90
+	DAA	
+	ADCA	#$40
+	DAA	
+	LBRA	OUTPUT
+
+

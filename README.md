@@ -11,19 +11,14 @@ Gerbers are now released! please see the Design files folder,  This is what is b
 
 A few provisos: 
 
-Currently, the board boots to MON09, with the ability to jump to basic. the framework for LBA volume access is roughed into the firmware, and mirrors the LBA access on the Z80 MBC2.  The only difference here is the use of Big Endian addressing where 16 bit numbers are sent to 
-the controller.
+Currently the board can boot FLEX, with a small IO package and interact with filesystem images, as well as a well rounded MON09 monitor boot rom as well that has access to a floating point basic.  There is also an implementation of BBC Basic IV.  The board runs at 20 Mhz and shares that clock between the IO contoler which is an atmega32a and the 63C09 CPU which is running at an E strobe of 5 Mhz.   All of the chips in the board can be programed with a very low cost ICSP programer such as the USBAsp Or the USBTiny programmer and once programmed all updates can be done via a USB cable using USB to TTL.  The board uses a Simple SD module for online storage and the system roms are loaded into the 128K memory module at boot time, the aditional ram is availible to the CPU through 16K banks.
 
-what is currently needed is help developing ports to flex, Nitros09, Cubix and more. If you think that's you, but the prospect of soldering the board from scratch is a hold up, I have a few pre-production boards left I can assemble and you can keep if you'll help with porting a platform to the computer.
+
+what is currently needed is help developing ports to Nitros09, Cubix and more. If you think that's you, but the prospect of soldering the board from scratch is a hold up, I have a few pre-production boards left I can assemble and you can keep if you'll help with porting a platform to the computer.
 
 you can find a significantly updated Programmers reference in the documents folder, if interested.
 
 4.2 Is the most recent version of the PCB and is verified to work.
-
-NOTICE: the AHC logic bom has been found to cause issues I have rolled back to the mouser HC bom.  Please use this moving forward.
-issues were found specifically relating to propigation delay of the chipset, in combination with the 74AHC254, which would occasionally cause 
-the ram to miss writes -- especially when the 63C09 was runing in native mode, or when atempting to write the ram from the microcontroller.
-switching to the HC chips resolves this issue. 
 
 You can find more details at: 
 https://hackaday.io/project/193108-hb63c09m-mini-itx-63c09-form-factor-computer

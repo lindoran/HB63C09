@@ -89,6 +89,17 @@ const uint8_t NIBBLE_MASK  = 252; // Shifted nibble mask as it appears on the C 
 // ASCII ESC for vCMOS
 #define ESC_KEY 27
 
+#define NUM_VARIABLES 3                      // Define the maximum number of variables
+#define VAR_SYMBOL_LENGTH 10                 // max symbol character size for variable symbols
+#define VAR_FORMAT_LENGTH 5                  // max format character length for variable formater 
+
+extern uint16_t biosStart;                   // start of the system rom in memory (this will eventually be stored in EEPROM)
+extern uint16_t biosSize;                    // this is the size to load to memory before reset. (this will eventually be stored in EEPROM)
+extern char     biosName[MAX_FN_LENGTH];     // this is the filename in the root of the sd card to load.
+extern char     filePath[MAX_PT_LENGTH];      // filePath space for the current calculated path 
+extern char     curPath[MAX_FN_LENGTH];      // this is the current path name.
+
+
 
 // Define default bootstrap values
 const uint16_t DEFAULT_BIOS_START = 0xC000;
@@ -100,15 +111,30 @@ const char DEFAULT_BIOS_NAME[MAX_FN_LENGTH] = "BIOS.BIN";
 //  0 BIOS START ADDRESS (2 BYTES)
 //  4 BIOS SIZE (2 BYTES)
 //  8 BIOS NAME (13 BYTES)
-// 21 BIOS PATH (13 BYTES)
+// 21 CHECKSUM  (1 BYTE)
  
 const int BIOS_START_ADDR = 0;
 const int BIOS_SIZE_ADDR = sizeof(uint16_t);                  // normally 2
 const int BIOS_NAME_ADDR = BIOS_SIZE_ADDR + sizeof(uint16_t); // normally 4
-const int BIOS_PATH_ADDR = BIOS_NAME_ADDR + MAX_FN_LENGTH;    // Assuming 13 bytes for biosName
-const int CHECKSUM_ADDR = BIOS_PATH_ADDR + MAX_FN_LENGTH;     // Assuming 13 bytes for biosPath
+const int CHECKSUM_ADDR = BIOS_NAME_ADDR + MAX_FN_LENGTH;     // Assuming 13 bytes for biosName
+
+typedef struct {
+    char name[VAR_SYMBOL_LENGTH];
+    void *ptr;
+    char formatSpecifier[VAR_FORMAT_LENGTH];
+} Variable;
 
 
 
+// Define maximum input length 
+#define MAX_INPUT_LENGTH 40 
 
-#endif /* VCMOS_H */
+Variable variables[NUM_VARIABLES] = {
+    {"START", &biosStart, "%X"},
+    {"SIZE", &biosSize, "%X"},
+    {"FILE", &biosName, "%s"},
+};
+
+
+
+#endif /* CONST_H */

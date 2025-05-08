@@ -9,15 +9,6 @@
 
 ;; lets enable 6309 since the CPU is required for the architecture of the computer
 h6309   EQU     1
-TCTRL   EQU     $A03B
-TTICK   EQU     $A03C
-
-
-
-; interupt service routine
-        ORG     $500
-
-OFLOW   FCB     $00,$08         ; 16 bit overflow value
 
         ORG     $1000           ; Jump to this location with G 1000 in MON09 or ASSIST9
 CONFIG:
@@ -33,22 +24,8 @@ CONFIG:
         CLR     3,S             ; Clear Y (temp high byte)
                                 ; Dispite what mand_get says in mandelbrot.asm itterations is in 6,S
 
-        CLR     TIMER           ; Clear the timer space
-        CLR     TIMER+1
-        CLR     TIMER+2
-        CLR     TIMER+3
-        CLR     BCDT            ;Clear the BCD SPACE
-        CLR     BCDT+1          
-        CLR     BCDT+2
-        CLR     BCDT+3         
-        
 
-        LDA     #8              ; overflow value in ms                 
-        STA     TTICK           ; Set the Timer from LSB 
-        ANDCC   #$EF            ; enable interupts from IRQ line (6309)
-        LDA     #1              ; bit 1 and 8 set in A (set interupts start timer on AVR) 
-        STA     TCTRL           ; start timer
-
+  
 loop:
         LBSR    mand_get        ; Compute Mandelbrot for current position
         LBSR    PLOT            ; Map result to a gradient character and send it to UART
@@ -73,19 +50,6 @@ loop:
         LEAS    5,S             ; Deallocate stack
         
 DONE:       
-        ;CLRA
-        ;STA     TCTRL           ; Stop Timer
-        ;ORCC    #$10            ; disable interups IRQ line                     
-        LDD     TIMER+2          ; pull just the 16 bits off the bottom of the timer.  
-        ;MULD    #8              ; multiply by the value at OFLOW
-        ;EXG     D,W             ; we need the bottom 16 bits ie bcd in d
-        BSR     BN2BCD          ; break out BCD to Q
-        STQ     BCDT            ; save temp for testing
-        LDX     #BCDT           ; index for BCD Printer
-        LBSR    PRINT_BCD       ; Print BCD ms
-        LDX     #TSTR           ; get ready to print the string
-        LBSR    PRINT           ; Print the String
-        LBSR    CRLF            ; CR
         
 
         ifdef h6309
@@ -96,45 +60,11 @@ DONE:
 
         JMP     [$FFFE]         ; Jump to reset vector
 
-;; timer interupt service routine 
-ISR:
-        ;; end early if we need to to save so many cycles!!
-        ;; we are going to do very small incriments
-        LDA     TCTRL           ; clear the interupt
-        INC     TIMER+3         ; start incriments to a 32bit Big endian number
-        BNE L2
-        INC     TIMER+2
-        BNE L2  
-        INC     TIMER+1
-        BNE L2
-        INC     TIMER
-L2      RTI
-
-;        LDA     TCTRL           ; clear the interupt 
-;        LDQ     TIMER           ; Load the timer
-;        INCW                    ; Begin 32bit inc.
-;        BNE     L2              
-;        INCD                    
-;L2      EQU     *
-;
-;        STQ     TIMER           ; place the timer back in memory
-;        RTI                     ; Return from interupt
-
-
-TIMER   FCB 0,0,0,0             ; 32bit Timer
-BCDT:   FCB 0,0,0,0,255         ; Binary coded decimal output
-TSTR:     
-        FCC " msec."  ; The message string
-        FCB 0         ; Null Terminator    
 
 
 ;; includes uart and multi-mandelbrot for 24 bit fp math for optimal results.
 
-        INCLUDE "bn2bcd.asm"    ;bin 2 bcd converter
 
         INCLUDE "68b50.asm"     ;68b50 routines
         
         INCLUDE "../6x09/mandelbrot24.asm" ; Include Mandelbrot and fixed-point routines
-
-        ORG $FFF8     ; set interupt vector for IRQ to ISR
-        FDB ISR

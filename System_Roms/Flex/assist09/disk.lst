@@ -1,0 +1,194 @@
+                      ;; drive emulation drivers
+                      ;; This interfaces fabio difabis's IOS based drive emulation 
+                      ;; as modified for the HB63C09M SBC
+                      
+                      ;; macros
+                      
+                      ;; Set interupts
+                      SEI     MACRO           
+                              ANDCC   #$EF
+                              ENDM
+                      
+                      ;; clear interupts 
+                      CLI     MACRO
+                              ORCC    #$10
+                              ENDM
+                      
+                      ;; set carry flag
+                      SEC     MACRO
+                              ORCC    #$01
+                              ENDM
+                      CLC     MACRO 
+                              ANDCC   #$FE
+                              ENDM
+                      
+                      
+                      ;; Equates System Roms/Flex/console.asm
+                      
+A000                  ACIA    EQU     $A000           ;; Wrapper address
+A011                  NULL    EQU     $A011           ;; NULL ADDRESS (CURRENTLY EMPTY)
+F837                  MON09   EQU     $F837           ;; monitor
+A006                  FLPSEL  EQU     ACIA+6          ;; Select floppy
+A007                  FLPTRK  EQU     ACIA+7          ;; Select floppy track
+A008                  FLPSEC  EQU     ACIA+8          ;; Select Floppy Sector
+A009                  FLPWRI  EQU     ACIA+9          ;; WRITE A SECTOR
+A006                  DRVREG  EQU     FLPSEL          ;; Return the drive number from controler
+A007                  TRKREG  EQU     FLPTRK          ;; return the track number from controler
+A008                  SECREG  EQU     FLPSEC          ;; return the sector selected (-1, as the routine decrements this)
+A009                  FLPREA  EQU     FLPWRI          ;; READ A SECTOR
+A00A                  FLPSTA  EQU     ACIA+$0A        ;; Read the controller for an error code.
+                      
+                      ;; vector table disk IO
+DE00                          ORG     $DE00           ;Expects the table to start here        
+DE00  7EDE2E          DREAD   JMP     READ            ;Read A sector
+DE03  7EDE59          DWRITE  JMP     WRITE           ;write a sector
+DE06  7EDE6F          DVERIFY JMP     VERIFY          ;verify a sector that's been written
+DE09  7EDE73          RESTOR  JMP     RST             ;Track 0
+DE0C  7EDE81          DRIVE   JMP     DRV             ;Select Disk
+DE0F  7EDEA2          DCHECK  JMP     CHKRDY          ;Ready Checks
+DE12  7EDEA2          DQUICK  JMP     CHKRDY          ; ''
+DE15  7EDE23          DINIT   JMP     INIT            ;Drive Init 
+DE18  7EDE2D          DWARM   JMP     WARM            ;Drive Warm reset
+DE1B  7EDE44          DSEEK   JMP     SEEK            ;Seek to a track.
+                      
+                      ;; Global Storage
+                      
+DE1E  00              CURDRV  FCB     0               ;Current Drive
+DE1F  00000000        DRVTRK  FDB     0,0             ;Current track per drive
+                      
+                      ;; INIT AND WARM
+                      ;;
+                      ;; DRIVER INITIALIZATION
+DE23                  INIT    
+DE23  8EDE1E                  LDX     #CURDRV         ;Point to Vars 
+DE26  C605                    LDB     #5              ;no. of bytes to clean
+DE28  6F80            INIT3   CLR     ,x+             ;clear the storage
+DE2A  5A                      DECB    
+DE2B  26FB                    BNE     INIT3           ;Loop till done
+DE2D  39              WARM    RTS
+                      
+                      ;; READ
+                      ;;
+                      ;; READ ONE SECTOR
+DE2E  8D14            READ    BSR     SEEK            ; seek to track and sector
+DE30  5D                      TSTB                    ; if B<>0 then error
+DE31  2610                    BNE     READ3           ; error detected
+DE33  5F                      CLRB                    ; Get sector length = 256
+DE34                          CLI                     ; disable interupts for read command (multi step controller command)
+DE34  1A10                    ORCC    #$10
+DE36  B6A009          READ2   LDA     FLPREA          ; read a sector byte
+DE39  A780                    STA     ,X+             ; put in memory inc 'x'
+DE3B  5A                      DECB                    ; dec the counter
+DE3C  26F8                    BNE     READ2           ; loop til done with sector
+DE3E                          SEI                     ; inable interupts, were done.
+DE3E  1CEF                    ANDCC   #$EF
+DE40  F6A00A                  LDB     FLPSTA          ; Check for errors 
+DE43                  READ3
+DE43  39                      RTS                     ; return
+                      
+                      ;; SEEK 
+                      ;;
+                      ;; SEEK THE SPECIFIED TRACK
+DE44                  SEEK
+DE44  5A                      DECB                    ; sectors are numberd 1 to 20 on flex disk 0 to 19 on controller
+DE45  F7A008                  STB     FLPSEC          ; Set the sector
+DE48  F6A00A                  LDB     FLPSTA          ; Check the controler Error register.
+DE4B  260B                    BNE     SEEK4           ; if B <> 0 there is an error
+DE4D  B1A007                  CMPA    TRKREG          ; Compare to current track
+DE50  2706                    BEQ     SEEK4           ; Exit if same track
+DE52  B7A007                  STA     FLPTRK          ; Store the track value
+DE55  F6A00A                  LDB     FLPSTA          ; check the controler error register.
+DE58                  SEEK4
+DE58  39                      RTS                     ; we are done, error is returned in 'b'
+                      
+                      
+                      ;; WRITE
+                      ;;
+                      ;; WRITE ONE SECTOR
+DE59                  WRITE
+DE59  8DE9                    BSR     SEEK            ; seek to track and sector
+DE5B  5D                      TSTB                    ; if B<>0 then error
+DE5C  2610                    BNE     WRITE3          ; error detected                
+DE5E  5F                      CLRB                    ; Get sector length = 256
+DE5F                          CLI                     ; disable interupts for write command (multi step controller command)
+DE5F  1A10                    ORCC    #$10
+DE61                  WRITE2  
+DE61  A680                    LDA     ,X+             ; get a data byte from memory
+DE63  B7A009                  STA     FLPWRI          ; write the data byte to the sector
+DE66  5A                      DECB                    ; decriment the counter
+DE67  26F8                    BNE     WRITE2          ; wait till done.
+DE69                          SEI                     ; Enable interupts we're done (doesn't modify 'z')
+DE69  1CEF                    ANDCC   #$EF
+DE6B  F6A00A                  LDB     FLPSTA          ; Check for errors 
+DE6E                  WRITE3
+DE6E  39                      RTS                     ; we are done error is in 'b'
+                      
+                      
+                      ;; VERIFY
+                      ;;
+                      ;; VERIFY LAST SECTOR WRITTEN
+                      ;; This is redundant, the write command is going to return an error 
+                      ;; if there was an error it will be passed through we still check
+                      ;; for a drive error if there is one we return a CRC.
+DE6F                  VERIFY
+DE6F  F6A00A                  LDB     FLPSTA          ; Check for errors
+DE72  39                      RTS
+                      
+                      ;; RESTORE
+                      ;;
+                      ;; RESET TRACK 0
+DE73                  RST
+DE73  3410                    PSHS    X               ; Save 'x' register
+DE75  8D0A                    BSR     DRV             ; do select
+DE77  C601                    LDB     #1              ; SET TO SECTOR 1
+DE79  4F                      CLRA                    ; SET TO TRACK 0
+DE7A  8DC8                    BSR     SEEK            ; do track 0 seek               
+DE7C  3510                    PULS    X               ; restore 'x'
+DE7E  C5D8                    BITB    #$D8            ; just check for 'other' type WD Drive Controller errors
+DE80  39                      RTS                     ; return
+                      
+                      ;; DRV
+                      ;; 
+                      ;; SELECT THE SPECIFIED DRIVE
+DE81                  DRV
+DE81  A603                    LDA     3,X             ; GET THE DRIVE NUMBER
+DE83  8103                    CMPA    #3              ; is it less than 4?
+DE85  2305                    BLS     DRV2            ; Branch if ok
+DE87  C60F                    LDB     #$0F            ; Set Error value if not
+DE89                          SEC                     ; set carry flag.
+DE89  1A01                    ORCC    #$01
+DE8B  39                      RTS                     ; return prematurely
+DE8C  8D23            DRV2    BSR     FINDTRK         ; Find the track
+DE8E  F6A007                  LDB     TRKREG          ; Check the current track
+DE91  E784                    STB     ,X              ; Save it
+DE93  B7A006                  STA     FLPSEL          ; Store the new Floppy number on controller
+DE96  B7DE1E                  STA     CURDRV          ; Store the new floppy drive in memory          
+DE99  8D16                    BSR     FINDTRK         ; Find the track
+DE9B  A684                    LDA     ,X              
+DE9D  B7A007                  STA     FLPTRK          ; Set the track in the controller
+DEA0  200B                    BRA     OK              ; branch to exit of CHKRDY
+                      
+                              
+                      ;; CHKRDY
+                      ;;
+                      ;; CHECK DRIVE READY ROUTINE 
+DEA2                  CHKRDY
+DEA2  A603                    LDA     3,X             ; Get drive number
+DEA4  8101                    CMPA    #1              ; Be sure its a 1 or 0
+DEA6  2305                    BLS     OK              ; branch if ok
+DEA8  C680                    LDB     #$80            ; else show not ready
+DEAA                          SEC                     ; set carry
+DEAA  1A01                    ORCC    #$01
+DEAC  39                      RTS                     ; Return early
+DEAD  5F              OK      CLRB                    ; Show no error
+DEAE                          CLC                     ; Clear Carry
+DEAE  1CFE                    ANDCC   #$FE
+DEB0  39                      RTS
+                      
+                      
+                      ;;
+DEB1                  FINDTRK
+DEB1  8EDE1F                  LDX     #DRVTRK         ;Point to track store
+DEB4  F6DE1E                  LDB     CURDRV          ;Get the current drive
+DEB7  3A                      ABX                     ;point to drive's track
+DEB8  39                      RTS                     

@@ -1,0 +1,3 @@
+# Documents:
+
+The Programers refrence is a WIP.  There's some good information there but I am still going through and updating for the newest file IO reveisons.  This wasn't finished as of the last update but hope to have that done in short order.  All of the documenation for each of the IO functions is notated in the Arduino sketch. if you are confused on how something works I would check there first.  The IO map in the programers refrence is correct and updated, however some of the descriptions are needed to be gone over or completed. 

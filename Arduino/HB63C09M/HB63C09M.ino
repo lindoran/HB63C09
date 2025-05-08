@@ -3,31 +3,13 @@ HB63C09 Sketch is (C) David Collins under the terms of the GPL 3.0 (see repo)
 https://github.com/lindoran/HB63C09
 
 Attribution: 
+The Z80-MBC2 project was hevally refrenced for the creation of this board and firmware
+Disk routines from that project can be found in older revisions of the code.  These 
+had to be re-written but I would like to state planely that none of the work here
+would have been done without the help of that project (and many others, but especially 
+Fabios work) as it was instrimental in the creation of everthing you see here.
 
-IOS/Z80-MBC Code for Floppy emulation is (C) Fabio Defabis under the GPL 3.0
-In line call outs within the code specify where this is the case.
-Details for the Z80-MBC2 project are: 
 https://github.com/SuperFabius/Z80-MBC2
-
-SD library from: https://github.com/greiman/PetitFS (based on 
-PetitFS: http://elm-chan.org/fsw/ff/00index_p.html)
-
-PetitFS licence:
-/-----------------------------------------------------------------------------/
-/  Petit FatFs - FAT file system module  R0.03                  (C)ChaN, 2014
-/-----------------------------------------------------------------------------/
-/ Petit FatFs module is a generic FAT file system module for small embedded
-/ systems. This is a free software that opened for education, research and
-/ commercial developments under license policy of following trems.
-/
-/  Copyright (C) 2014, ChaN, all right reserved.
-/
-/ * The Petit FatFs module is a free software and there is NO WARRANTY.
-/ * No restriction on use. You can use, modify and redistribute it for
-/   personal, non-profit or commercial products UNDER YOUR RESPONSIBILITY.
-/ * Redistributions of source code must retain the above copyright notice.
-/
-/-----------------------------------------------------------------------------/
 
 ***Thank you*** 
 
@@ -52,9 +34,9 @@ WARNING!!!
 #include <stdint.h>
 #include <Wire.h>
 #include <EEPROM.h>
-#include "PetitFS.h"
+#include <SD.h>
 #include "blockcopy.h"  // this is the bootstrap machine code
-#include "vbios.h"  // this is the staging set up environment.
+
 
 
 //RAM Write accsess time - best to not mess with this
@@ -88,6 +70,7 @@ void write_a_nibble(uint16_t data);   // forward def, see code block below ex: w
 // File name Defines for IOS
 
 #define   M6X09DISK     "DS0N00.DSK"  // Generic 6x09 disk name (from DS0N00.DSK to DS9N99.DSK)
+#define   M6X09FLPY     "FLPY00.DSK"  // Generic Floppy Name (from FLPY00.DSK to FLPY03.DSK)
 
 // Global System variables  -- see const.h for readabiblity constants
 
@@ -97,12 +80,8 @@ uint8_t  lastOp = 0;                  // last operation run (MSB = read / write 
 uint8_t  curOp = 0;                   // curent operation run (MSB = read /write bit, remaining bits are addres)
 uint16_t ioByteCnt;                   // Exchanged bytes counter durring an I/O operation
 uint8_t  tempByte;                    // temorary byte storage
-FRESULT  errCodeSD;                   // Temporary variable to store error codes from the PetitFS
-FILINFO  fno;                         // current derectory file info 
-DIR      dir;                         // current directory 
-DIR      lastDir;                     // temp directory storage, the last entered directory 
-char     filePath[MAX_PT_LENGTH];     // filePath space for the current calculated path 
-char     curPath[MAX_FN_LENGTH];      // this is the current path name.
+
+File     imgFile;                     // working file for current file
 uint8_t  numReadBytes;                // Number of read bytes after a readSD() call
 uint8_t  loaderReg = 0;               // loader register.
 uint16_t loaderAddr= 0;               // this is the loader current address.
@@ -122,23 +101,18 @@ uint8_t  tStatus = 0;                 // timer Status Register
 uint8_t  tControl = 0;                // Timer Control register.
 uint8_t  intRegister = 0;             // this register contains the status of interupt generation, this is used only by the interupt handler
 
- 
-volatile uint16_t timerCounts;
-uint8_t prescalerBits = 0;
-
-const char *  fileNameSD;             // Pointer to the string with the currently used file name
-
-FATFS    filesysSD;                   // Filesystem object (PetitFS library)
-uint8_t  bufferSD[32];                // I/O buffer for SD disk operations (store a "segment" of a SD sector).
-char  diskName[MAX_FN_LENGTH] 
-       = M6X09DISK;                   // String used for virtual disk file name -- always selects disk zero after staging in the current directory
-uint16_t trackSel;                    // Store the current track number [0..511]
-uint8_t  sectSel;                     // Store the current sector number [0..31]
-uint8_t  diskErr = 19;                // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
-                                      //  error code
-uint16_t SectSize = 511;              // This is the size of the sectoring for the given media default is 512 can be set to 256 
-uint8_t  numWriBytes;                 // Number of written bytes after a writeSD() call
 uint8_t  diskSet = 0;                 // Current "Disk Set"  -- since subdirectories all disk sets are 0, each system rom will have it's own disk sets.
+
+int16_t  diskByte = 0;                // signed int for error detection. (will return -1 on reads, we mask down to uint8_t to transfer the byte).
+uint8_t  flpCmd = 0;                      // command register for soft sectord floppy controler.
+uint8_t  drvNumb = 0;                     // current drive number soft sectored floppy
+uint8_t  flpErr = 0;                      // error code for soft sector floppy  
+uint8_t  flpTrack = 0;                    // floppy track 0 - 255
+uint8_t  flpSector = 0;                   // floppy sector 0 - 254 (from flex this is 1-255)
+char     flpName[MAX_FN_LENGTH]
+          = M6X09FLPY;          
+uint8_t  errReg = 0;
+
 
 // constants
 const byte maxDiskNum = 99;           // Max number of virtual disks
@@ -170,8 +144,8 @@ while(!Serial); // waiting for USB Serial to load.
 RAMWrite(42,0xFFFF);    //write the meaning of life.
 // its ram?
 if (RAMRead(0xFFFF) == 42) {
-
-  Serial.println(F("Staging From RAM..."));
+  Serial.println();
+  Serial.println(F("Welcome to the vBIOS Staging Enviornment..."));
   Serial.println(F("Bootstrap Code loading at 0xFFC0...") );  
   
   loaderAddr = blockcopy_blks[0].start;
@@ -184,27 +158,17 @@ if (RAMRead(0xFFFF) == 42) {
   RAMWrite(0xFF, 0xFFFE);
   RAMWrite(0xC0, 0xFFFF);  
     
-  // mount the SD Card to initiaize HB63C09 - IOS Floppy emulation 
+  // mount the SD Card to initiaize HB63C09 - vBios Floppy emulation 
   // see Attribuition at top
-  Serial.print(F("IOS: Attempting to mount SD Card"));
-  if (mountSD(&filesysSD))
-   // Error mounting. Try again
-   {
-     errCodeSD = mountSD(&filesysSD);
-     errCodeSD = mountSD(&filesysSD);
-     if (errCodeSD)
-     // Error again. Repeat until error disappears (or the user forces a reset)
-     do
-     {
-       printErrSD(0, errCodeSD, NULL);
-       waitKey();                                // Wait a key to repeat
-       mountSD(&filesysSD);                      // New double try
-       errCodeSD = mountSD(&filesysSD);
-     }
-     while (errCodeSD);
-     Serial.println(F("IOS: SD Card found!")) ;
-   }
-  else Serial.println(F("...OK!"));
+  Serial.println(F("vBIOS: Attempting to mount SD Card"));
+  if (!SD.begin()) {
+    do {
+       waitKey();
+       }
+       while(!SD.begin());
+       
+  }
+
   // Check EEPROM CONTENTS
   Serial.println();  
   Serial.println(F("Current vBIOS settings:"));
@@ -220,44 +184,74 @@ if (RAMRead(0xFFFF) == 42) {
     showVariables(); // show current EEPROM Settings
     Serial.println();
     
-    Serial.println(F("press <ESC> for vBIOS"));
+    Serial.println(F("press <ESC> for vBIOS settings"));
     Serial.println();
     if (waitForEscape(3000)) {
-      showLeadIn(); // show the vBios Leadin on serial out
-      change_dir("/"); // set to root directory, this sets up the defalut state.
-      vbiosStart(); // call the interpreter
+
+      Serial.println(F("Escape pressed! Enter BIOS configuration manually."));
+
+      Serial.print(F("Enter BIOS start address (hex, default 0x"));
+      Serial.print(DEFAULT_BIOS_START, HEX);
+      Serial.print(F("): "));
+      biosStart = readHexInput(DEFAULT_BIOS_START);
+      Serial.println();
+
+      Serial.print(F("Enter BIOS size (hex, default 0x"));
+      Serial.print(DEFAULT_BIOS_SIZE, HEX);
+      Serial.print(F("): "));
+      biosSize = readHexInput(DEFAULT_BIOS_SIZE);
+      Serial.println();
+
+      Serial.print(F("Enter BIOS filename (default "));
+      Serial.print(DEFAULT_BIOS_NAME);
+      Serial.print(F("): "));
+      readFilenameInput(biosName, MAX_FN_LENGTH, DEFAULT_BIOS_NAME);
+      Serial.println();
       
+      Serial.println(F("Configuration complete."));
+      updateEEPROM(); // Save what was entered
+
+
     }   
 
 
   } else {
+    
       // Data is invalid or EEPROM is not initialized, update with default values
-      Serial.println(F("Data in EEPROM is invalid or uninitialized. starting vBIOS..."));
+      Serial.println(F("Data in EEPROM is invalid or uninitialized, loading defaults."));
       Serial.println();
-      showLeadIn(); // show the vBios Leadin 
-      change_dir("/"); // set to root directory, this sets up the defalut state.
       
-      vbiosStart(); // call the interpereter
+      //Set defaults, C000, 4000, and ASSIST09.BIN see const.h
+      
+      biosStart = DEFAULT_BIOS_START;
+      biosSize  = DEFAULT_BIOS_SIZE;
+     
+      strncpy(biosName, DEFAULT_BIOS_NAME, MAX_FN_LENGTH);
+      biosName[MAX_FN_LENGTH - 1] = '\0'; // extra safe!
+      
+      updateEEPROM(); // rebuild the eeprom and the checksum
   }
   
-  buildFilePath(curPath, biosName);
-  Serial.printf("IOS: Mounting %s volume...",filePath);
-  diskErr = openSD(filePath);       // open the bios volume
-  if (diskErr) {
-    printErrSD(1,diskErr,biosName); // print error message
-    Serial.println(F(" ... Halt!"));
+ 
+  Serial.printf("vBIOS: Mounting %s volume...",biosName);
+  imgFile = SD.open(biosName, FILE_READ);
+  imgFile.seek(0);
+  if (!imgFile) {
+    Serial.println(F("Can not find System ROM File on SD ... Halt!"));
     while(1);  // halt.
   }
-  // seek to 0 just in case 
-  diskErr = seekSD(0);
-   if (diskErr) {
-    printErrSD(4,diskErr,biosName); // print error message
-    Serial.println(F(" ... Halt!"));
-    while(1);  // halt.
-  }
-} else {  // its ROM...
-  Serial.println(F("\nStaging From ROM"));
-
+ 
+}else {
+  // we couldn't find the ram chip! 
+  // something is wrong
+  Serial.println(F("RAM issue detected at 0xFFFF Could not read back Sanity check!"));
+  Serial.println(F("Halt!"));
+ 
+  // place debug code here system is in tri-state with the 
+  // controller in control of the top of the address space
+  
+  
+  while(1); 
 }
 
 Serial.println();
@@ -284,7 +278,7 @@ Serial.println(F("HD63C09 is now on the bus..."));
 // Lets burn this candle! -- System coming out of reset state
 // these two have external pull ups- setting the lines on the arduino to inputs effectively tri-states the link between the two chips
 
-//Timer1_init();   // start the timer at 10ms / 100hz with 6309 interupts disabled.
+
 
 bitClear(DDRB, RES_);
 bitClear(DDRB, HALT_);
@@ -357,10 +351,10 @@ void loop(){
         *  WRITE OPERATIONS: 
         *   0xA000    - UARTCNT    - Legacy 6850 UART Control register.
         *   0xA001    - TXSERIAL   - 6850 Wrapper: Send a byte to TX Buffer (default buffer size is 64bytes)
-        *   0xA002    - SELDISK*   - Select Disk Number ie: 0..99
-        *   0xA003    - SELTRACK*  - Select Disk Track  ie: 0..511 (two bytes in sequence)
-        *   0xA004    - SELSECT*   - Select Disk Sector ie: 0..31  
-        *   0xA005    - WRITESECT* - Write a Sector to the Disk (512 bytes in sequence) 
+        *   0xA006    - FLPSEL     - Select Soft Sectored Floppy
+        *   0xA007    - FLPTRK     - Select Floppy Track
+        *   0xA008    - FLPSEC     - Select Floppy Sector
+        *   0xA009    - FLPWRI     - Write a 256 Byte sector
         *   ...
         *   0xA03B    - TIMRCNT    - Timer Control Register
         *   0xA03B    - SETTICK*   - Set the system Tick Timer in msec, default is 10 msec.  
@@ -370,13 +364,15 @@ void loop(){
         *  READ OPERATIONS:  
         *   0xA000    - UARTSTAT   - 6850 Wrapper: Send data back as if it were a 6850 Status regeister.(SEE ACCEPTIONS IN CASE)
         *   0xA001    - RXSERIAL   - 6850 Wrapper: Read a byte from the RX buffer (defalut buffer size is 64bytes)
-        *   0xA002    - ERRDISK*   - Read out the last disk error
-        *   0xA003    - READSECT*  - Read a sector from the disk (512 bytes in sequence) 
-        *   0xA004    - SDMOUNT*   - Mount the installed volume (output error code as read value)
+        *   0xA006    - DRVREG     - Returns the selected Drive number
+        *   0xA007    - TRKREG     - Returns the selected Track Number
+        *   0xA008    - SECREG     - Returns the selected Sector Number (will be offset by -1 in flex)
+        *   0xA009    - FLPREA     - Read a 256 byte sector
+        *   0xA00A    - FLPSTA     - Read the Controler Error Codes. 
         *   ...
         *   0xA03B    - TIMRSTA    - Timer Status Register
-        *   0xA03C    - RTIMRMS    - Sample timer while running
-        *   0xA03D    - RTIMRLS    - Read System status register  
+        *   0xA03C    - SAMPTICK    - Sample timer while running
+        *   0xA03D    - SYSTAT     - Read System status register  
         *   0xA03E    - LOADER     - This is the loader port its typically locked to the user.
         *   0xA03F    - RDBANK     - Read the last selected bank value 
         *   
@@ -405,210 +401,142 @@ void loop(){
               intHandler();
 
               break;
-              
-             // begin IOS Emulation code for write, see Attribution at the top
-             case 0x02:
-              // DISK EMULATION
-              // SELDISK - select the emulated disk number (binary). 100 disks are supported [0..99]:
-              //
-              //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-              //                            ---------------------------------------------------------
-              //                             D7 D6 D5 D4 D3 D2 D1 D0    DISK number (binary) [0..99]
-              //
-              //
-              // Opens the "disk file" correspondig to the selected disk number, doing some checks.
-              // A "disk file" is a binary file that emulates a disk using a LBA-like logical sector number.
-              // Every "disk file" must have a dimension of 8388608 bytes, corresponding to 16384 LBA-like logical sectors
-              //  (each sector is 512 bytes long), correspinding to 512 tracks of 32 sectors each (see SELTRACK and
-              //  SELSECT Opcodes).
-              // Errors are stored into "errDisk" (see ERRDISK Opcode).
-              //
-              //
-              // ...........................................................................................
-              //
-              // "Disk file" filename convention:
-              //
-              // Every "disk file" must follow the sintax "DSsNnn.DSK" where
-              //
-              //    "s" is the "disk set" and must be in the [0..9] range (always one numeric ASCII character)
-              //    "nn" is the "disk number" and must be in the [00..99] range (always two numeric ASCII characters)
-              //
-              // ...........................................................................................
-              //
-              //
-              // NOTE 1: The maximum disks number may be lower due the limitations of the used OS (e.g. CP/M 2.2 supports
-              //         a maximum of 16 disks)
-              // NOTE 2: Because SELDISK opens the "disk file" used for disk emulation, before using WRITESECT or READSECT
-              //         a SELDISK must be performed at first.
-              // NOTE 3: vBios uses directories to separate the emulated file systems with their boot images]'
-              //         each fill will be named DS0N00.DSK, DS0N01.DSK, DS0N02 ... and so on.  The file names 
-              //         will follow this convetion for each subdirectory that uses i0S commands inside their ROMS
-
-              if (busData <= maxDiskNum)             // Valid disk number
-              // Set the name of the file to open as virtual disk, and open it
-              {
-                diskName[2] = diskSet + 48;         // Set the current Disk Set
-                diskName[4] = (busData / 10) + 48;   // Set the disk number
-                diskName[5] = busData - ((busData / 10) * 10) + 48;
-                buildFilePath(curPath, diskName);    // support vBIOS Path names
-                diskErr = openSD(filePath);         // Open the "disk file" corresponding to the given disk number
-              }
-              else diskErr = 16;                    // Illegal disk number
-              break;
-              
-             case 0x03:
-              // DISK EMULATION
-              // SELTRACK - select the emulated track number (word split in 2 bytes in sequence: DATA 0 and DATA 1):
-              //
-              //                I/O DATA 0:  D7 D6 D5 D4 D3 D2 D1 D0
-              //                            ---------------------------------------------------------
-              //                             D7 D6 D5 D4 D3 D2 D1 D0    Track number (binary) MSB [0..1]
-              //
-              //                I/O DATA 1:  D7 D6 D5 D4 D3 D2 D1 D0
-              //                            ---------------------------------------------------------
-              //                             D7 D6 D5 D4 D3 D2 D1 D0    Track number (binary) LSB [0..255]
-              //
-              //
-              // Stores the selected track number into "trackSel" for "disk file" access.
-              // A "disk file" is a binary file that emulates a disk using a LBA-like logical sector number.
-              // The SELTRACK and SELSECT operations convert the legacy track/sector address into a LBA-like logical 
-              //  sector number used to set the logical sector address inside the "disk file".
-              // A control is performed on both current sector and track number for valid values. 
-              // Errors are stored into "diskErr" (see ERRDISK Opcode).
-              //
-              //
-              // NOTE 1: Allowed track numbers are in the range [0..511] (512 tracks)
-              // NOTE 2: Before a WRITESECT or READSECT operation at least a SELSECT or a SELTRAK operation
-              //         must be performed
-              // NOTE 3: Big endian numbering so MSB is written first. (this differs from the Z80MBC and the V20MBC)
-
-  
-              if (!ioByteCnt)
-              // MSB
-              {
-                trackSel = ((word)busData) << 8;
-              }
-              else
-              // LSB
-              {
-                trackSel |= busData;
-
-                if ((trackSel < 512) && (sectSel < 32))
-                // Sector and track numbers valid
-                {
-                  diskErr = 0;                      // No errors
-                }
-                else
-                // Sector or track invalid number
-                {
-                  if (sectSel < 32) diskErr = 17;   // Illegal track number
-                  else diskErr = 18;                // Illegal sector number
-                }
+               
+             case 0x06:
+             /* NEW SOFT SECTOR FLOPPY COMMANDS 
+              * FLPSEL - Select the floppy drive
+              * 
+              * Has to be 0 - 3, each is a image file in the directory of the boot rom 
+              * calld FLPY00.DSK - FLPY03.DSK.  They are all 80 track 20 sector's.
+              * 
+              * will default to the last disk selected if it errors.  error codes are listed
+              * below in the read status and mimic the WD floppy controler.
+              * 
+              */
+              flpErr = 0;
+              if (busData <= 3)                            // Valid disk number
+               // Set the name of the file to open as virtual disk, and open it
+               {
+                 drvNumb = busData;
+                 imgFile.close();                          // asure that any file left open accidentally is closed. 
+                 
+                 flpName[4] = (busData / 10) + 48;         // Set the disk number
+                 flpName[5] = busData - ((busData / 10) * 10) + 48;
+                 
+                 imgFile = SD.open(flpName,FILE_WRITE);    // Open the "disk file" corresponding to the given disk number
                 
-              }
-              ioByteCnt++;
-              break;
+                 if (!imgFile) {
+                  
+                  bitSet(flpErr,7);           // disk not ready
+                
+                 }
+                 
+               }
+               else {
+                
+                bitSet(flpErr,4) ;                     // Disk does not exist.
+               
+               }
               
-             case 0x04:
-              // DISK EMULATION
-              // SELSECT - select the emulated sector number (binary):
-              //
-              //                  I/O DATA:  D7 D6 D5 D4 D3 D2 D1 D0
-              //                            ---------------------------------------------------------
-              //                             D7 D6 D5 D4 D3 D2 D1 D0    Sector number (binary) [0..31]
-              //
-              //
-              // Stores the selected sector number into "sectSel" for "disk file" access.
-              // A "disk file" is a binary file that emulates a disk using a LBA-like logical sector number.
-              // The SELTRACK and SELSECT operations convert the legacy track/sector address into a LBA-like logical 
-              //  sector number used to set the logical sector address inside the "disk file".
-              // A control is performed on both current sector and track number for valid values. 
-              // Errors are stored into "diskErr" (see ERRDISK Opcode).
-              //
-              //
-              // NOTE 1: Allowed sector numbers are in the range [0..31] (32 sectors)
-              // NOTE 2: Before a WRITESECT or READSECT operation at least a SELSECT or a SELTRAK operation
-              //         must be performed
-  
-              sectSel = busData;
-              if ((trackSel < 512) && (sectSel < 32))
-              // Sector and track numbers valid
-              {
-                diskErr = 0;                        // No errors
-              }
-              else
-              // Sector or track invalid number
-              {
-                if (sectSel < 32) diskErr = 17;     // Illegal track number
-                else diskErr = 18;                  // Illegal sector number
-              }
+              break; // internal case
+           
+             case 0x07:
+             /*NEW SOFT SECTOR FOPPLY COMMANDS
+              *FLPTRK - Select the floppy track
+              *
+              *Has to be 0 - 79, if this value is greater it will return a seek error.
+              * 
+              */
+              flpErr = 0;  // flush flpErr
+              if (busData <= 79) {        // valid track number 0-79
+                flpTrack = busData;   
+               }
+               else { 
+                
+                bitSet(flpErr,4);       // seek error
+        
+               }
+            
               break;
 
-             case 0x05:
-              // DISK EMULATION
-              // WRITESECT - write 512 data bytes sequentially into the current emulated disk/track/sector:
-              //
-              //                 I/O DATA 0: D7 D6 D5 D4 D3 D2 D1 D0
-              //                            ---------------------------------------------------------
-              //                             D7 D6 D5 D4 D3 D2 D1 D0    First Data byte
-              //
-              //                      |               |
-              //                      |               |
-              //                      |               |                 <510 Data Bytes>
-              //                      |               |
-              //
-              //
-              //               I/O DATA 511: D7 D6 D5 D4 D3 D2 D1 D0
-              //                            ---------------------------------------------------------
-              //                             D7 D6 D5 D4 D3 D2 D1 D0    512th Data byte (Last byte)
-              //
-              //
-              // Writes the current sector (512 bytes) of the current track/sector, one data byte each call. 
-              // All the 512 calls must be always performed sequentially to have a WRITESECT operation correctly done. 
-              // If an error occurs during the WRITESECT operation, all subsequent write data will be ignored and
-              //  the write finalization will not be done.
-              // If an error occurs calling any DISK EMULATION Opcode (SDMOUNT excluded) immediately before the WRITESECT 
-              //  Opcode call, all the write data will be ignored and the WRITESECT operation will not be performed.
-              // Errors are stored into "diskErr" (see ERRDISK Opcode).
-              //
-              // NOTE 1: Before a WRITESECT operation at least a SELTRACK or a SELSECT must be always performed
-              // NOTE 2: Remember to open the right "disk file" at first using the SELDISK Opcode
-              // NOTE 3: The write finalization on SD "disk file" is executed only on the 512th data byte exchange, so be 
-              //         sure that exactly 512 data bytes are exchanged.
-  
-              if (!ioByteCnt)
-              // First byte of 512, so set the right file pointer to the current emulated track/sector first
-              {
-                if ((trackSel < 512) && (sectSel < 32) && (!diskErr))
-                // Sector and track numbers valid and no previous error; set the LBA-like logical sector
-                {
-                diskErr = seekSD((trackSel << 5) | sectSel);  // Set the starting point inside the "disk file"
-                                                              //  generating a 14 bit "disk file" LBA-like 
-                                                              //  logical sector address created as TTTTTTTTTSSSSS
-                }
-              }
-            
-  
-              if (!diskErr)
-              // No previous error (e.g. selecting disk, track or sector)
-              {
-                tempByte = ioByteCnt % 32;          // [0..31]
-                bufferSD[tempByte] = busData;        // Store current exchanged data byte in the buffer array
-                if (tempByte == 31)
-                // Buffer full. Write all the buffer content (32 bytes) into the "disk file"
-                {
-                  diskErr = writeSD(bufferSD, &numWriBytes);
-                  if (numWriBytes < 32) diskErr = 19; // Reached an unexpected EOF
-                  if (ioByteCnt >= SectSize)
-                  // Finalize write operation and check result (if no previous error occurred)
-                  {
-                    if (!diskErr) diskErr = writeSD(NULL, &numWriBytes);
-                    curOp = 255;    // asure ioByteCnt resets cleanly.
+             case 0x08:
+             /* NEW SOFT SECTOR FLOPPY COMMANDS 
+              * FLPSEC - Select the floppy Sector
+              * 
+              * has to be a value 0-19, keep in mind flex tracks this as 1-20 so you will have to
+              * agment the value in your drivers by 1 to correct the sector numbering so that it
+              * matches.
+              * 
+              *if the value is greater it will pass an error
+              */
+               flpErr = 0;  // flush flpErr
+               if (busData <= 19) {  // valid track number 0-19 ie (1-20 inside flex)
+                flpSector = busData;               
+               }
+               else {
+                
+              
+                bitSet(flpErr,4);    // seek error
+                
+               }
+               
+               break;
+              
+              case 0x09:
+              /*
+               * FLPWRI - Write the selected sector (soft sector floppy emulation)
+               *
+               * Usage: 
+               *  You must write to 0xA009 256 times in a row for the operation to complete. 
+               *  Not writing all the data will cause the SD card to not properly update,
+               *  which could result in data corruption. Disable interrupts on the host CPU side 
+               *  to avoid causing a reset in the multi-op logic. 
+               *
+               *
+               * Design Notes:
+               *  - This routine writes one byte at a time directly to the SD card file.
+               *  - Every 32 bytes, a flush() is called to commit data, minimizing internal SD buffering.
+               *  - No RAM buffering is used — this saves memory on the ATmega32 (only a few bytes used total).
+               *  - This approach is slower than bulk writes, but still orders of magnitude faster than a real floppy drive.
+               *  - Priority is reliability and minimal RAM use, not maximum write speed.
+               *  - Flushing every 32 bytes reduces SD card wear and ensures data integrity in case of power loss.
+               *
+               * Floppy seek emulation is maintained by calculating the correct file offset
+               * based on track and sector numbers (logical LBA formula).
+               */
+
+
+               if (!ioByteCnt) {
+                // First byte of transfer, calculate offset and seek.
+                if ((flpTrack < 80) && (flpSector < 20) && (!flpErr)) {
+                  if (!(imgFile.seek((flpTrack * 20UL + flpSector) * 256UL))) {
+                    bitSet(flpErr, 4); // seek error
+                   
                   }
+                  
                 }
-              }
-              ioByteCnt++;                          // Increment the counter of the exchanged data bytes
+               }
+
+               if (!flpErr) {
+                tempByte = ioByteCnt % 32; // 0..31 it should complete 8 flushes in 256 bytes, and flush on the last byte.
+                imgFile.write(busData);
+                if (tempByte == 31) {
+                  imgFile.flush();   // ensure data actually written, keep internal buffer small.
+                }
+
+               if (ioByteCnt >= 255) {
+                if (tempByte < 31) {
+                 
+                  bitSet(flpErr,2); // unexpected end of write operation. 
+                 
+                }
+                  curOp = 255; // mark operation finished, resets multi-op cleanly
+                }
+               }
+
+              ioByteCnt++; // count bytes transferred
               break;
+
              
              case 0x3B:  
              /* TIMRCNT --  
@@ -668,8 +596,6 @@ void loop(){
                *  +---------------+---------------------------------------------------------+
                *  |     02        |  halts the 6309, remains halted until next sys_reset    |
                *  +---------------+---------------------------------------------------------+
-               *  |     03        |  Toggles sector size between 256 and 512                |
-               *  +---------------+---------------------------------------------------------+
                *  |               |  Unlocks the Loader enviornment for the above, or to    |
                *  |     FF        | stage the computer. (see read operation 0x03E)          |
                *  +---------------+---------------------------------------------------------+
@@ -699,17 +625,6 @@ void loop(){
                     loaderReg = 0;
 
                   } 
-                  break;
-                case 0x03:
-                  // toggle sector size between 256 and 512
-                 if (loaderReg == 0xFF) {
-                    if (SectSize == 511) SectSize = 255;
-                     else SectSize == 511;
-                     loaderReg = 0;
-                 } else { 
-                   loaderReg = 0;
-                  
-                 }
                   break;
                  
                 case 0xff:
@@ -775,123 +690,113 @@ void loop(){
                intHandler();
                
                break; // end of read uart 
-              
-              case 0x02:
-               // DISK EMULATION
-               // ERRDISK - read the error code after a SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT 
-               //           or SDMOUNT operation
-               //
-               //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-               //                            ---------------------------------------------------------
-               //                             D7 D6 D5 D4 D3 D2 D1 D0    DISK error code (binary)
-               //
-               //
-               // Error codes table:
-               //
-               //    error code    | description
-               // ---------------------------------------------------------------------------------------------------
-               //        0         |  No error
-               //        1         |  DISK_ERR: the function failed due to a hard error in the disk function, 
-               //                  |   a wrong FAT structure or an internal error
-               //        2         |  NOT_READY: the storage device could not be initialized due to a hard error or 
-               //                  |   no medium
-               //        3         |  NO_FILE: could not find the file
-               //        4         |  NOT_OPENED: the file has not been opened
-               //        5         |  NOT_ENABLED: the volume has not been mounted
-               //        6         |  NO_FILESYSTEM: there is no valid FAT partition on the drive
-               //       16         |  Illegal disk number
-               //       17         |  Illegal track number
-               //       18         |  Illegal sector number
-               //       19         |  Reached an unexpected EOF
-               //
-               //
-               //
-               //
-               // NOTE 1: ERRDISK code is referred to the previous SELDISK, SELSECT, SELTRACK, WRITESECT or READSECT
-               //         operation
-               // NOTE 2: Error codes from 0 to 6 come from the PetitFS library implementation
-               // NOTE 3: ERRDISK must not be used to read the resulting error code after a SDMOUNT operation 
-               //         (see the SDMOUNT Opcode)
-               
-               busData = diskErr;
-               break;
-               
-              case 0x03:
-               // DISK EMULATION
-               // READSECT - read 512 data bytes sequentially from the current emulated disk/track/sector:
-               //
-               //                 I/O DATA:   D7 D6 D5 D4 D3 D2 D1 D0
-               //                            ---------------------------------------------------------
-               //                 I/O DATA 0  D7 D6 D5 D4 D3 D2 D1 D0    First Data byte
-               //
-               //                      |               |
-               //                      |               |
-               //                      |               |                 <510 Data Bytes>
-               //                      |               |
-               //
-               //               I/O DATA 127  D7 D6 D5 D4 D3 D2 D1 D0
-               //                            ---------------------------------------------------------
-               //                             D7 D6 D5 D4 D3 D2 D1 D0    512th Data byte (Last byte)
-               //
-               //
-               // Reads the current sector (512 bytes) of the current track/sector, one data byte each call. 
-               // All the 512 calls must be always performed sequentially to have a READSECT operation correctly done. 
-               // If an error occurs during the READSECT operation, all subsequent read data will be = 0.
-               // If an error occurs calling any DISK EMULATION Opcode (SDMOUNT excluded) immediately before the READSECT 
-               //  Opcode call, all the read data will be will be = 0 and the READSECT operation will not be performed.
-               // Errors are stored into "diskErr" (see ERRDISK Opcode).
-               //
-               // NOTE 1: Before a READSECT operation at least a SELTRACK or a SELSECT must be always performed
-               // NOTE 2: Remember to open the right "disk file" at first using the SELDISK Opcode
-  
-               if (!ioByteCnt)
-               // First byte of 512, so set the right file pointer to the current emulated track/sector first
-               {
-                 if ((trackSel < 512) && (sectSel < 32) && (!diskErr))
-                 // Sector and track numbers valid and no previous error; set the LBA-like logical sector
-                 {
-                  diskErr = seekSD((trackSel << 5) | sectSel);  // Set the starting point inside the "disk file"
-                                                                //  generating a 14 bit "disk file" LBA-like 
-                                                                //  logical sector address created as TTTTTTTTTSSSSS
-                 }
-               }
-               if (!diskErr)
-               // No previous error (e.g. selecting disk, track or sector)
-               {
-                 tempByte = ioByteCnt % 32;        // [0..31]
-                 if (!tempByte)
-                 // Read 32 bytes of the current sector on SD in the buffer (every 32 calls, starting with the first)
-                 {
-                   diskErr = readSD(bufferSD, &numReadBytes); 
-                   if (numReadBytes < 32) diskErr = 19;    // Reached an unexpected EOF
-                 }
-                 if (!diskErr) busData = bufferSD[tempByte];// If no errors, exchange current data byte with the CPU 
-               }
-               if (ioByteCnt >= SectSize) 
-               {
-                 curOp = 255;                      // All done. Set ioOpcode = "No operation"
-               }
-               ioByteCnt++;                        // Increment the counter of the exchanged data bytes
-               break;
 
-              case 0x04:
-               // DISK EMULATION
-               // SDMOUNT - mount a volume on SD, returning an error code (binary):
-               //
-               //                 I/O DATA 0: D7 D6 D5 D4 D3 D2 D1 D0
-               //                            ---------------------------------------------------------
-               //                             D7 D6 D5 D4 D3 D2 D1 D0    error code (binary)
-               //
-               //
-               //
-               // NOTE 1: This Opcode is "normally" not used. Only needed if using a virtual disk from a custom program
-               //         loaded with iLoad or with the Autoboot mode (e.g. ViDiT). Can be used to handle SD hot-swapping
-               // NOTE 2: For error codes explanation see ERRDISK Opcode
-               // NOTE 3: Only for this disk Opcode, the resulting error is read as a data byte without using the 
-               //         ERRDISK Opcode
-  
-               busData = mountSD(&filesysSD);
-               break;  
+             case 0x06:
+              /*NEW SOFT SECTOR FLOPPY ROUTINES
+               *DRVREG - Floppy Register 
+               *
+               *Returns the currently selected drive
+               *
+               */
+               
+   
+              busData = drvNumb;
+
+              break; 
+              
+               
+             case 0x07:
+              /* NEW SOFT SECTOR FLOPPY ROUTINES
+               * TRKREG - Track Register
+               * 
+               * Returns the currently selected track
+               */
+              busData = flpTrack;
+              
+              break; 
+
+             case 0x08:
+              /* NEW SOFT SECTOR FLOPPY ROUTINES 
+               * SECREG - Sector Register
+               * 
+               * Returns the currently selected sector
+               */
+              busData = flpSector;
+
+              break;
+             
+               
+            case 0x09:
+             /*
+              * FLPREA - Read a sector from the floppy image
+              *
+              * Reads exactly 256 bytes sequentially without interruption.
+              * Host-side interrupts must be disabled during this operation to prevent
+              * partial reads, which would cause errors and data corruption.
+              *
+              * Operation:
+              *  - On the first byte, calculate the logical offset from track and sector, then seek.
+              *  - Read one byte at a time from the SD file.
+              *  - If a read error (EOF or other) occurs, set the appropriate error bit.
+              *  - Continue until 256 bytes have been read, then signal the operation complete.
+              */
+
+                // seek to proper location in file selected by last seek
+                if (!ioByteCnt) {
+                // First byte of transfer, calculate offset and seek.
+                 if ((flpTrack < 80) && (flpSector < 20) && (!flpErr)) {
+                   if (!(imgFile.seek((flpTrack * 20UL + flpSector) * 256UL))) {
+                     bitSet(flpErr, 4); // seek error
+                     
+                   }
+                  
+                 }
+                }
+                
+                // check for errors from seek and continue if none
+                if (!flpErr) {
+
+                    //read with enough resolution to see the errors from valid bits 
+                    //diskByte is type int16_t
+
+                    diskByte = imgFile.read();
+                    busData = (uint8_t) lowByte(diskByte); // strip the MSB 
+
+                    // check for errors 
+                    if (diskByte == -1) {
+                          // we hit a EOF or there is an error need to return error code 
+                          bitSet(flpErr, 3);  // CRC error -- we reached an unexpected end to data  
+                        
+                    }
+                          
+                }
+                if (ioByteCnt >= 255) {
+                  curOp = 255; // reset last op this value makes certain that the multi io logic resets cleanly.
+                }
+              
+                ioByteCnt++;                          // Increment the counter of the exchanged data bytes
+                 
+             break;
+              
+
+              case 0x0A:
+             /*NEW SOFT SECTOR FLOPPY ROUTINES
+              * FLPSTA - Status register, returns a WD like drive error code           
+              * 
+              * BIT         Status      
+              *  7         Not Ready   
+              *  6            0  
+              *  5            0
+              *  4  Seek Error / Not Found
+              *  3         CRC Error 
+              *  2        Lost Data 
+              *  1            0     
+              *  0            0
+              */
+               busData = flpErr;
+
+               break;
+            
 
               case 0x3B:
                /* TIMRSTA
@@ -939,12 +844,9 @@ void loop(){
                 *               I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0  
                 *                          ---------------------------------------------------------  
                 *                          
-                *                                     ....             bits D5 - D7 are Future use
-                *                                     
-                *                            X  X  X  0  X  X  X  X    Loader Register is locked       
-                *                            X  X  X  1  X  X  X  X    Loader Register is unlocked
-                *                            X  X  X  X  0  X  X  X    Sectoring is 512 bytes           
-                *                            X  X  X  X  1  X  X  X    Sectoring is 256 bytes
+                *                                     ....             bits D3 - D7 are Future use
+                * 
+
                 *                            X  X  X  X  X  0  X  X    TX interupt unset          
                 *                            X  X  X  X  X  1  X  X    TX interupt set          
                 *                            X  X  X  X  X  X  0  X    RX interupt unset 
@@ -957,8 +859,6 @@ void loop(){
                 */
                 
                 busData = 0;   // reset bus data
-                if (loaderReg == 255) bitSet(busData, 4);
-                if (SectSize == 255) bitSet(busData, 3);
                 if (txIntEn) bitSet(busData,2);
                 if (rxIntEn) bitSet(busData,1);
                 if (tmIntEn) bitSet(busData,0);
@@ -983,49 +883,52 @@ void loop(){
                     break;
                     case 0x02:
                       // send the number of bytes to read MSB
-                      busData = (biosSize >> 8) & 0xFF;
+                      busData = highByte(biosSize+1);
+
+                      break;
 
                     case 0x03:
                       // send the number of bytes to read LSB
-                      busData = biosSize & 0xFF;
+                      busData = lowByte(biosSize+1);
 
                     break;
                     
                     default:
-                      //send the data                          
-                      if (!diskErr)
-                      // No previous error (e.g. fs issue)
-                      {
-                        tempByte = (ioByteCnt-4) % 32;        // [0..31]
-                        if (!tempByte)
-                        // Read 32 bytes of the current sector on SD in the buffer (every 32 calls, starting with the first)
-                        {
-                          diskErr = readSD(bufferSD, &numReadBytes); 
-                          if (numReadBytes < 32) diskErr = 19;    // Reached an unexpected EOF
-                        }
-                        if (!diskErr) busData = bufferSD[tempByte];// If no errors, exchange current data byte with the CPU
-                      }
-                    break;  
-                  }
-                  ioByteCnt++; 
-                  // clean up after loader if done.
-                  if  ((ioByteCnt > (biosSize+4)) && ( loaderReg = 255) ) { 
-                    // we are done loading the data and must reset or the computer will hang.
-                    loaderReg = 0; // re-lock the loader
-                    curOp = 255;   // reset last op (this value makes certain a new operation is initiated.)
+                      // send the data                          
+                      // No previous error from this point would have crashed at boot time.
+
+                      // read with enough resolution to see the errors from valid bits diskByte
+                      // is type int16_t. 
+                      
+                      //   0xFFFF = -1  = ERROR!
+                      //   0x00XX = (an 8 bit value)
+
+                      diskByte = imgFile.read();   
+
+                      // check for EOF or errors
+                      if (diskByte != -1)
+                      
+                          // if none mask off the diskByte to keep just the LSB (stored data)
+                           
+                          busData = (uint8_t) lowByte(diskByte);
+                          
+                      else {
+                            // we hit the EOF or its an error.
+                            // we are done loading the data and must reset or the computer will hang.
+                            loaderReg = 0; // re-lock the loader
+                            curOp = 255;   // reset last op (this value makes certain a new operation is initiated.)
+                            imgFile.close();  // close the file so we can open the floppy image.
                     
-                    
-                    // quickly select first LBA volume on boot.
-                    buildFilePath(curPath, diskName);
-                    Serial.println(F("LOADER: Finished bootstrap"));
-                    Serial.printf("IOS: Setting disk to %s ...\r\n",filePath);
-                    diskErr = openSD(filePath);       // open the first LBA Volume in the selected ROM directory.
-                    bitSet(DDRB, RES_);
-                    bitClear(DDRB, RES_); // reset
+                            Serial.println(F("LOADER: Finished bootstrap"));
+                            bitSet(DDRB, RES_);
+                            bitClear(DDRB, RES_); // reset
+                          }
+                     
+                     break; 
+                    } 
                   }
-                  
-                } 
-                break;
+              ioByteCnt++;    
+              break;
                 
               case 0x3F:
                //RDBANK 
@@ -1050,7 +953,7 @@ void loop(){
 
 } // end - on to next loop
 
-// init timer routine 
+
 
 
 // handle interupts
@@ -1153,15 +1056,8 @@ void updateEEPROM(void) {
     for (int i = 0; i < MAX_FN_LENGTH; i++) {
         EEPROM.write(BIOS_NAME_ADDR + i, 0);
     }
-    for (int i = 0; i < strlen(biosName); i++) {               
+    for (int i = 0; i < MAX_FN_LENGTH; i++) {               
         EEPROM.write(BIOS_NAME_ADDR + i, biosName[i]);
-    }
-    // blank space to update eeprm
-    for (int i = 0; i < MAX_FN_LENGTH; i++) {
-        EEPROM.write(BIOS_PATH_ADDR + i, 0);
-    }
-    for (int i = 0; i < MAX_FN_LENGTH; i++) {
-        EEPROM.write(BIOS_PATH_ADDR + i, curPath[i]);
     }
     // Update checksum
     uint8_t newChecksum = calculateChecksum(biosStart,biosSize,biosName);
@@ -1176,10 +1072,6 @@ void readEEPROM(void) {
      biosName[i] = EEPROM.read(BIOS_NAME_ADDR + i);
   }
   biosName[sizeof(biosName) - 1] = '\0';  // ensure null termination 
-  for (int i = 0; i < sizeof(curPath); i++) {
-    curPath[i] = EEPROM.read(BIOS_PATH_ADDR + i);
-  }
-  curPath[sizeof(curPath) - 1] = '\0'; // ensure null termination
   EEPROM.get(CHECKSUM_ADDR, storedChecksum);
 }
 
@@ -1210,223 +1102,106 @@ uint8_t calculateChecksum(uint16_t start, uint16_t size, const char* name) {
     return checksum;
 }
 
-void vbiosStart (void) {
-while(true) {
-        // if a comand is waiting...
-        if(Serial.available()) {  
-          // see vbios.cpp / vbios.h for detals of processing commands
-          if(processCommand(readSerialLine())) {
-            Serial.println();
-            break;
-          } else {
-            Serial.println();
-            Serial.print(F("> "));
-          }
-        } else { 
-            delay(10);  // prevent wait blocking 
+// Function to show the EEPROM variables
+void showVariables() {
+    for (int i = 0; i < NUM_VARIABLES; i++) {
+        Serial.printf(" %-7s: ", variables[i].name);
+        
+        // Cast the pointer to the appropriate type before dereferencing
+        if (strcmp(variables[i].formatSpecifier, "%s") == 0) {
+            // If the format specifier is "%s", cast to char* and print as a string
+            Serial.printf(variables[i].formatSpecifier, reinterpret_cast<char*>(variables[i].ptr));
+        } else {
+            // Otherwise, assume it's an integer and cast to uint16_t*
+            Serial.printf(variables[i].formatSpecifier, *reinterpret_cast<uint16_t*>(variables[i].ptr));
         }
-  
+        
+        Serial.println();
+    }
+}
+
+void readFilenameInput(char* dest, size_t maxLength, const char* defaultName) {
+  char buffer[MAX_FN_LENGTH];
+  size_t pos = 0;
+
+  while (true) {
+    if (Serial.available()) {
+      char c = Serial.read();
+
+      if (c == '\r' || c == '\n') {
+        break; // Done typing
+      } else if (c == 8 || c == 127) {
+        if (pos > 0) {
+          pos--;
+          Serial.print("\b \b");
+        }
+      } else if (isPrintable(c) && pos < (maxLength - 1)) {
+        c = toupper(c);
+        buffer[pos++] = c;
+        Serial.print(c);
       }
+      // Ignore anything else
+    }
+  }
+
+  buffer[pos] = '\0'; // Null terminate
+
+  if (pos == 0) {
+    // Nothing entered, use default
+    Serial.print(defaultName);
+    strncpy(dest, defaultName, maxLength);
+  } else {
+    strncpy(dest, buffer, maxLength);
+  }
+
+  dest[maxLength - 1] = '\0'; // extra safe
 }
 
-void showLeadIn(void) {
-    Serial.println();
-    Serial.println(F("Welcome to HB63C09M vBIOS!"));
-    Serial.println(F(" (C) 2023 - D. Collins (Z80Dad)"));
-    Serial.println();
-    Serial.println(F("Type '?' for Commands "));
-    Serial.println();
-    Serial.print(F("> "));
+
+uint16_t readHexInput(uint16_t defaultValue) {
+  char buffer[10];
+  size_t pos = 0;
+
+  while (true) {
+    if (Serial.available()) {
+      char c = Serial.read();
+
+      if (c == '\r' || c == '\n') {
+        break; // Done typing
+      } else if (c == 8 || c == 127) {
+        if (pos > 0) {
+          pos--;
+          Serial.print("\b \b");
+        }
+      } else if (isHexadecimalDigit(c) && pos < (sizeof(buffer) - 1)) {
+        c = toupper(c);
+        buffer[pos++] = c;
+        Serial.print(c);
+      } else if ((c == 'x' || c == 'X') && pos == 1 && buffer[0] == '0') {
+        buffer[pos++] = c;
+        Serial.print(c);
+      }
+      // Ignore anything else
+    }
+  }
+
+  buffer[pos] = '\0'; // Null terminate
+
+  if (pos == 0) {
+    // Nothing entered, use default
+    Serial.print(defaultValue, HEX);
+    return defaultValue;
+  } else {
+    // Parse typed input
+    return (uint16_t) strtol(buffer, NULL, 16);
+  }
 }
-// IOS SD Card routines for Z80-MBC2 floppy emulation See *** Attribution at top ***
-// ------------------------------------------------------------------------------
 
-// SD Disk routines (FAT16 and FAT32 filesystems supported) using the PetitFS library.
-// For more info about PetitFS see here: http://elm-chan.org/fsw/ff/00index_p.html
-
-// ------------------------------------------------------------------------------
 
 void waitKey()
 // Wait a key to continue
 {
   while (Serial.available() > 0) Serial.read();   // Flush serial RX buffer
-  Serial.println(F("IOS: Check SD and press a key to repeat\r\n"));
+  Serial.println(F("vBIOS: Check SD and press a key to repeat\r\n"));
   while(Serial.available() < 1);
-}
-
-
-byte mountSD(FATFS* fatFs)
-// Mount a volume on SD: 
-// *  "fatFs" is a pointer to a FATFS object (PetitFS library)
-// The returned value is the resulting status (0 = ok, otherwise see printErrSD())
-{
-  return pf_mount(fatFs);
-}
-
-// ------------------------------------------------------------------------------
-
-byte openSD(const char* fileName)
-// Open an existing file on SD:
-// *  "fileName" is the pointer to the string holding the file name (8.3 format)
-// The returned value is the resulting status (0 = ok, otherwise see printErrSD())
-{
-  return pf_open(fileName);
-}
-
-// ------------------------------------------------------------------------------
-
-byte readSD(void* buffSD, byte* numReadBytes)
-// Read one "segment" (32 bytes) starting from the current sector (512 bytes) of the opened file on SD:
-// *  "BuffSD" is the pointer to the segment buffer;
-// *  "numReadBytes" is the pointer to the variables that store the number of read bytes;
-//     if < 32 (including = 0) an EOF was reached).
-// The returned value is the resulting status (0 = ok, otherwise see printErrSD())
-//
-// NOTE1: Each SD sector (512 bytes) is divided into 16 segments (32 bytes each); to read a sector you need to
-//        to call readSD() 16 times consecutively
-//
-// NOTE2: Past current sector boundary, the next sector will be pointed. So to read a whole file it is sufficient 
-//        call readSD() consecutively until EOF is reached
-{
-  UINT  numBytes;
-  byte  errcode;
-  errcode = pf_read(buffSD, 32, &numBytes);
-  *numReadBytes = (byte) numBytes;
-  return errcode;
-}
-
-// ------------------------------------------------------------------------------
-
-byte writeSD(void* buffSD, byte* numWrittenBytes)
-// Write one "segment" (32 bytes) starting from the current sector (512 bytes) of the opened file on SD:
-// *  "BuffSD" is the pointer to the segment buffer;
-// *  "numWrittenBytes" is the pointer to the variables that store the number of written bytes;
-//     if < 32 (including = 0) an EOF was reached.
-// The returned value is the resulting status (0 = ok, otherwise see printErrSD())
-//
-// NOTE1: Each SD sector (512 bytes) is divided into 16 segments (32 bytes each); to write a sector you need to
-//        to call writeSD() 16 times consecutively
-//
-// NOTE2: Past current sector boundary, the next sector will be pointed. So to write a whole file it is sufficient 
-//        call writeSD() consecutively until EOF is reached
-//
-// NOTE3: To finalize the current write operation a writeSD(NULL, &numWrittenBytes) must be called as last action
-{
-  UINT  numBytes;
-  byte  errcode;
-  if (buffSD != NULL)
-  {
-    errcode = pf_write(buffSD, 32, &numBytes);
-  }
-  else
-  {
-    errcode = pf_write(0, 0, &numBytes);
-  }
-  *numWrittenBytes = (byte) numBytes;
-  return errcode;
-}
-
-// ------------------------------------------------------------------------------
-
-byte seekSD(word sectNum)
-// Set the pointer of the current sector for the current opened file on SD:
-// *  "sectNum" is the sector number to set. First sector is 0.
-// The returned value is the resulting status (0 = ok, otherwise see printErrSD())
-//
-// NOTE: "secNum" is in the range [0..16383], and the sector addressing is continuos inside a "disk file";
-//       16383 = (512 * 32) - 1, where 512 is the number of emulated tracks, 32 is the number of emulated sectors
-//
-{
-  byte i;
-  return pf_lseek(((unsigned long) sectNum) << 9);
-}
-
-// ------------------------------------------------------------------------------
-
-void printErrSD(byte opType, byte errCode, const char* fileName)
-// Print the error occurred during a SD I/O operation:
-//  * "OpType" is the operation that generated the error (0 = mount, 1= open, 2 = read,
-//     3 = write, 4 = seek);
-//  * "errCode" is the error code from the PetitFS library (0 = no error);
-//  * "fileName" is the pointer to the file name or NULL (no file name)
-//
-// ........................................................................
-//
-// Errors legend (from PetitFS library) for the implemented operations:
-//
-// ------------------
-// mountSD():
-// ------------------
-// NOT_READY
-//     The storage device could not be initialized due to a hard error or no medium.
-// DISK_ERR
-//     An error occured in the disk read function.
-// NO_FILESYSTEM
-//     There is no valid FAT partition on the drive.
-//
-// ------------------
-// openSD():
-// ------------------
-// NO_FILE
-//     Could not find the file.
-// DISK_ERR
-//     The function failed due to a hard error in the disk function, a wrong FAT structure or an internal error.
-// NOT_ENABLED
-//     The volume has not been mounted.
-//
-// ------------------
-// readSD() and writeSD():
-// ------------------
-// DISK_ERR
-//     The function failed due to a hard error in the disk function, a wrong FAT structure or an internal error.
-// NOT_OPENED
-//     The file has not been opened.
-// NOT_ENABLED
-//     The volume has not been mounted.
-// 
-// ------------------
-// seekSD():
-// ------------------
-// DISK_ERR
-//     The function failed due to an error in the disk function, a wrong FAT structure or an internal error.
-// NOT_OPENED
-//     The file has not been opened.
-//
-// ........................................................................
-{
-  if (errCode)
-  {
-    Serial.print(F("\r\nIOS: SD error "));
-    Serial.print(errCode);
-    Serial.print(" (");
-    switch (errCode)
-    // See PetitFS implementation for the codes
-    {
-      case 1: Serial.print(F("DISK_ERR")); break;
-      case 2: Serial.print(F("NOT_READY")); break;
-      case 3: Serial.print(F("NO_FILE")); break;
-      case 4: Serial.print(F("NOT_OPENED")); break;
-      case 5: Serial.print(F("NOT_ENABLED")); break;
-      case 6: Serial.print(F("NO_FILESYSTEM")); break;
-      default: Serial.print(F("UNKNOWN")); 
-    }
-    Serial.print(F(" on "));
-    switch (opType)
-    {
-      case 0: Serial.print(F("MOUNT")); break;
-      case 1: Serial.print(F("OPEN")); break;
-      case 2: Serial.print(F("READ")); break;
-      case 3: Serial.print(F("WRITE")); break;
-      case 4: Serial.print(F("SEEK")); break;
-      default: Serial.print(F("UNKNOWN"));
-    }
-    Serial.print(F(" operation"));
-    if (fileName)
-    // Not a NULL pointer, so print file name too
-    {
-      Serial.print(F(" - File: "));
-      Serial.print(fileName);
-    }
-    Serial.println(")");
-  }
 }

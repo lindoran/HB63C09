@@ -26,46 +26,6 @@ WRWAIT: LDA USTAT              ; Check UART status
         STA UDATA              ; Send character
         RTS
 
-;; STRING START STORED IN X
-PRINT:  LDA ,X+                 ; START STRING IN X
-        BEQ PRDONE              ; IF NULL TERM
-        BSR CHOUT               ; PRINT THAT CHARACTER
-        BRA PRINT               ; LETS GET THE NEXT ONE
-PRDONE: RTS                     ; RETURN FROM PRINT
-
-PRINT_BCD:   
-        LDA ,X+                 ;Start of BCD in X
-        BEQ PRINT_BCD           ;Skip MSB's Zeros
-        TFR  A,B                ;Save A
-        CMPA #$FF               ;it's the end? (value of number is 0)
-        BEQ BCDONE              ;we are done.
-        LSRA                    ;Top Nibble
-        LSRA
-        LSRA
-        LSRA
-        BEQ SKIP_HIGH           ;Skip the High bit (we know the low bits are > 1)                    
-        ORA #$30                ;convert to ASCII
-        BSR CHOUT               ;send character
-KEEPZERO:
-        LDA ,X+                 ;Get next byte
-        TFR A,B                 ;Save A
-        CMPA #$FF               ;is it the end?
-        BEQ BCDONE              ;We're Done
-        LSRA                    ;Top Nibble
-        LSRA
-        LSRA
-        LSRA
-        ORA #$30                ;convert to ASCII
-        BSR CHOUT               ;send character
-
-SKIP_HIGH:
-        TFR  B,A                ;restore character
-        ANDA #$0F               ;MASK HIGH
-        ORA #$30
-        BSR CHOUT
-        BSR KEEPZERO            ;NEXT
-BCDONE:
-        RTS                     ; Return
 
 
 ; 16 levels of pseudo-shades in 7-Bit ASCII (darkest to lightest)

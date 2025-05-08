@@ -1,0 +1,177 @@
+                      (         test.asm):00001         ;; TEST UTILITY 
+                      (         test.asm):00002         
+                      (         test.asm):00003         ;;(C) 1980
+                      (         test.asm):00004         ;;Technical Systmems Consultants, Inc.
+                      (         test.asm):00005         ;;AS FOUND IN 6809 FLEX adaptation guide
+                      (         test.asm):00006         ;;See Full guide for info
+                      (         test.asm):00007         
+                      (         test.asm):00008         
+                      (         test.asm):00009         ;; tests single sector read / write, prompts user for input
+                      (         test.asm):00010         
+                      (         test.asm):00011         ;;EQUATES
+                      (         test.asm):00012         
+     D3FB             (         test.asm):00013         INCH    EQU     $D3FB
+     D3F9             (         test.asm):00014         OUTCH   EQU     $D3F9
+     D3F5             (         test.asm):00015         TINIT   EQU     $D3F5
+     D3F3             (         test.asm):00016         MONITR  EQU     $D3F3
+     C07F             (         test.asm):00017         STACK   EQU     $C07F
+     C840             (         test.asm):00018         FCB     EQU     $C840
+     1000             (         test.asm):00019         BUFFER  EQU     $1000
+     DE00             (         test.asm):00020         READ    EQU     $DE00
+     DE03             (         test.asm):00021         WRITE   EQU     $DE03
+     DE0C             (         test.asm):00022         DRIVE   EQU     $DE0C
+                      (         test.asm):00023         
+                      (         test.asm):00024         ;; TEMP STORAGE
+                      (         test.asm):00025                 ORG     $20
+0020                  (         test.asm):00026         COMMAND RMB     1
+0021                  (         test.asm):00027         TRACK   RMB     1
+0022                  (         test.asm):00028         SECTOR  RMB     1
+                      (         test.asm):00029         
+                      (         test.asm):00030         ;; start of program
+                      (         test.asm):00031                 ORG     $100    
+                      (         test.asm):00032         
+0100 10CEC07F         (         test.asm):00033         TEST    LDS     #STACK          ; STACK SETUP
+0104 AD9FD3F5         (         test.asm):00034                 JSR     [TINIT]         ; init terminal
+0108 BDDE15           (         test.asm):00035                 JSR     $DE15           ; INT DRIVE
+010B 10CEC07F         (         test.asm):00036         TEST1   LDS     #STACK          ; reset stack 
+010F 8D58             (         test.asm):00037                 BSR     PCRLF           
+0111 8646             (         test.asm):00038                 LDA     #'F'            ; Prompt for function
+0113 8D4A             (         test.asm):00039                 BSR     PROMPT          
+0115 8D5F             (         test.asm):00040                 BSR     INPUT           ; GET RESPONSE
+0117 8152             (         test.asm):00041                 CMPA    #'R'            ; Read Command
+0119 2708             (         test.asm):00042                 BEQ     TEST2           ; 
+011B 8157             (         test.asm):00043                 CMPA    #'W'            ; write command
+011D 2704             (         test.asm):00044                 BEQ     TEST2           
+011F 6E9FD3F3         (         test.asm):00045                 JMP     [MONITR]        ; EXIT THE PROGRAM
+0123 9720             (         test.asm):00046         TEST2   STA     COMMAND         ; SAVE THE COMMAND
+0125 8644             (         test.asm):00047                 LDA     #'D'            ; PROMPT FOR DRIVE
+0127 8D36             (         test.asm):00048                 BSR     PROMPT          ; 
+0129 BD01CC           (         test.asm):00049                 JSR     INHEX           ; GET RESPONSE
+012C 8104             (         test.asm):00050                 CMPA    #4              ; ENSURE its 0 to 3
+012E 24DB             (         test.asm):00051                 BHS     TEST1           
+0130 B7C843           (         test.asm):00052                 STA     FCB+3           ; SAVE it
+0133 8654             (         test.asm):00053                 LDA     #'T'            ; PROMPT FOR TRACK
+0135 8D2E             (         test.asm):00054                 BSR     HPRMPT          ; GET HEX PROMPT
+0137 9721             (         test.asm):00055                 STA     TRACK           
+0139 8653             (         test.asm):00056                 LDA     #'S'            ; prompt for Sector
+013B 8D28             (         test.asm):00057                 BSR     HPRMPT          ; GET HEX PROMT
+013D 9722             (         test.asm):00058                 STA     SECTOR          ; SAVE IT
+013F 8D28             (         test.asm):00059                 BSR     PCRLF           ; DO LINE FEED
+                      (         test.asm):00060         
+                      (         test.asm):00061         ;; GOT COMMAND, NOW DO IT
+                      (         test.asm):00062         
+0141 9620             (         test.asm):00063                 LDA     COMMAND         ; GET COMMAND
+0143 8157             (         test.asm):00064                 CMPA    #'W'            ; A WRITE COMMAND?
+0145 2652             (         test.asm):00065                 BNE     DOREAD          ; if not, its read
+0147 8D37             (         test.asm):00066                 BSR     SELECT          ; SELLECT DRIVE
+0149 8E1000           (         test.asm):00067                 LDX     #BUFFER         ; point to buffer
+014C DC21             (         test.asm):00068                 LDD     TRACK           ; POINT TO track and sector
+014E BDDE03           (         test.asm):00069                 JSR     WRITE           ; WRITE THE DATA
+0151 2635             (         test.asm):00070                 BNE     ERROR           
+0153 8D14             (         test.asm):00071                 BSR     PCRLF           
+0155 864F             (         test.asm):00072                 LDA     #'O'            ; PRINT OK
+0157 8D23             (         test.asm):00073                 BSR     OUTPUT          
+0159 864B             (         test.asm):00074                 LDA     #'K'    
+015B 8D1F             (         test.asm):00075                 BSR     OUTPUT
+015D 20AC             (         test.asm):00076                 BRA     TEST1           ; DO AGAIN
+                      (         test.asm):00077         
+                      (         test.asm):00078         ;; PROMPT ROUTINES
+                      (         test.asm):00079         
+015F 8D08             (         test.asm):00080         PROMPT  BSR     PCRLF           ; DO LINEFEED
+0161 8D19             (         test.asm):00081                 BSR     OUTPUT          ; OUTPUT PROMT LETTER
+0163 2015             (         test.asm):00082                 BRA     QUEST           ; PRINT QUESTION MARK
+0165 8DF8             (         test.asm):00083         HPRMPT  BSR     PROMPT          ; DO PROMPT
+0167 2056             (         test.asm):00084                 BRA     INBYTE          ; get Hex byte
+                      (         test.asm):00085         
+0169 3402             (         test.asm):00086         PCRLF   PSHS    A               ; save 'a'
+016B 860D             (         test.asm):00087                 LDA     #$0D            ; RETURN
+016D 8D0D             (         test.asm):00088                 BSR     OUTPUT          
+016F 860A             (         test.asm):00089                 LDA     #$0A            ; LINE FEED
+0171 8D09             (         test.asm):00090                 BSR     OUTPUT          
+0173 3502             (         test.asm):00091                 PULS    A               ; restore 'a'
+0175 39               (         test.asm):00092         RET     RTS     
+                      (         test.asm):00093         
+                      (         test.asm):00094         ;; io routines
+                      (         test.asm):00095         
+0176 6E9FD3FB         (         test.asm):00096         INPUT   JMP     [INCH]
+017A 863F             (         test.asm):00097         QUEST   LDA     #'?'
+017C 6E9FD3F9         (         test.asm):00098         OUTPUT  JMP     [OUTCH]
+                      (         test.asm):00099         
+                      (         test.asm):00100         ; drive select
+                      (         test.asm):00101         
+0180 8EC840           (         test.asm):00102         SELECT  LDX     #FCB
+0183 BDDE0C           (         test.asm):00103                 JSR     DRIVE
+0186 27ED             (         test.asm):00104                 BEQ     RET
+                      (         test.asm):00105         
+                      (         test.asm):00106         ; drive error
+0188 8DDF             (         test.asm):00107         ERROR   BSR     PCRLF
+018A 8645             (         test.asm):00108                 LDA     #'E'
+018C 8DEE             (         test.asm):00109                 BSR     OUTPUT
+018E 863D             (         test.asm):00110                 LDA     #'='
+0190 8DEA             (         test.asm):00111                 BSR     OUTPUT
+0192 1F98             (         test.asm):00112                 TFR     B,A             ; GET ERROR CODE
+0194 8D4D             (         test.asm):00113                 BSR     OUTHEX                  
+0196 16FF72           (         test.asm):00114                 LBRA    TEST1           ;START OVER
+                      (         test.asm):00115         
+0199 8DE5             (         test.asm):00116         DOREAD  BSR     SELECT          ; SELECT DRIVE
+019B 8E1000           (         test.asm):00117                 LDX     #BUFFER         ;point to buffer
+019E DC21             (         test.asm):00118                 LDD     TRACK           ; point to track and sector
+01A0 BDDE00           (         test.asm):00119                 JSR     READ            ; READ THE DATA
+01A3 26E3             (         test.asm):00120                 BNE     ERROR           
+                      (         test.asm):00121         
+                      (         test.asm):00122         ;; dump data to console 
+                      (         test.asm):00123         
+01A5 8E1000           (         test.asm):00124                 LDX     #BUFFER         
+01A8 8610             (         test.asm):00125                 LDA     #16             ; NO of LINES
+01AA 3402             (         test.asm):00126         DUMP1   PSHS    A               ; save no of lines
+01AC 8DBB             (         test.asm):00127                 BSR     PCRLF           
+01AE C610             (         test.asm):00128                 LDB     #16             ; no of bytes
+01B0 A680             (         test.asm):00129         DUMP2   LDA     ,X+             ; GET a byte
+01B2 8D2F             (         test.asm):00130                 BSR     OUTHEX          ; output it
+01B4 5A               (         test.asm):00131                 DECB                    ; done with line?
+01B5 26F9             (         test.asm):00132                 BNE     DUMP2           
+01B7 3502             (         test.asm):00133                 PULS    A               ; get num lines 
+01B9 4A               (         test.asm):00134                 DECA                    ; done with dump
+01BA 26EE             (         test.asm):00135                 BNE     DUMP1           ; loop if not
+01BC 16FF4C           (         test.asm):00136                 LBRA    TEST1           ; get next command
+                      (         test.asm):00137         
+01BF 8D0B             (         test.asm):00138         INBYTE  BSR     INHEX           
+01C1 48               (         test.asm):00139                 ASLA                    ; multiply by 16
+01C2 48               (         test.asm):00140                 ASLA
+01C3 48               (         test.asm):00141                 ASLA
+01C4 48               (         test.asm):00142                 ASLA
+01C5 3402             (         test.asm):00143                 PSHS    A               ; Save 'A'
+01C7 8D03             (         test.asm):00144                 BSR     INHEX
+01C9 ABE0             (         test.asm):00145                 ADDA    ,S+             
+01CB 39               (         test.asm):00146         RETN    RTS                     
+                      (         test.asm):00147         
+01CC 8DA8             (         test.asm):00148         INHEX   BSR     INPUT           
+01CE 8047             (         test.asm):00149                 SUBA    #$47
+01D0 2A0C             (         test.asm):00150                 BPL     INERR
+01D2 8B06             (         test.asm):00151                 ADDA    #6
+01D4 2A04             (         test.asm):00152                 BPL     INH2
+01D6 8B07             (         test.asm):00153                 ADDA    #7
+01D8 2A04             (         test.asm):00154                 BPL     INERR
+01DA 8B0A             (         test.asm):00155         INH2    ADDA    #10
+01DC 2AED             (         test.asm):00156                 BPL     RETN
+01DE 8D9A             (         test.asm):00157         INERR   BSR     QUEST           ;print question
+01E0 16FF28           (         test.asm):00158                 LBRA    TEST1           ;go start over
+                      (         test.asm):00159         
+01E3 3402             (         test.asm):00160         OUTHEX  PSHS    A
+01E5 44               (         test.asm):00161                 LSRA    
+01E6 44               (         test.asm):00162                 LSRA    
+01E7 44               (         test.asm):00163                 LSRA    
+01E8 44               (         test.asm):00164                 LSRA
+01E9 8D08             (         test.asm):00165                 BSR     OUTHR
+01EB 3502             (         test.asm):00166                 PULS    A
+01ED 8D04             (         test.asm):00167                 BSR     OUTHR
+01EF 8620             (         test.asm):00168                 LDA     #$20
+01F1 2089             (         test.asm):00169                 BRA     OUTPUT
+01F3 840F             (         test.asm):00170         OUTHR   ANDA    #$0F
+01F5 8B90             (         test.asm):00171                 ADDA    #$90
+01F7 19               (         test.asm):00172                 DAA     
+01F8 8940             (         test.asm):00173                 ADCA    #$40
+01FA 19               (         test.asm):00174                 DAA     
+01FB 16FF7E           (         test.asm):00175                 LBRA    OUTPUT
+                      (         test.asm):00176         
+                      (         test.asm):00177         
