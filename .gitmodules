@@ -1,9 +1,7 @@
-[submodule "System Roms/beeb6809"]
-	path = System Roms/beeb6809
-	url = https://github.com/lindoran/beeb6809.git
-[submodule "System Roms/Flex/flextools"]
-	path = System Roms/Flex/flextools
-	url = https://github.com/lindoran/flextools.git
+
 [submodule "System_Roms/beeb6809"]
 	path = System_Roms/beeb6809
 	url = https://github.com/lindoran/beeb6809.git
+[submodule "System_Roms/Flex/flextools"]
+	path = System_Roms/Flex/flextools
+	url = https://github.com/lindoran/flextools.git
