@@ -28,6 +28,10 @@ default settings (BIOS.BIN).
 Currently, the build process is manual. The old `bios.bin` automation needs to be  
 fully rewritten.
 
+TO use the computer you do not have to build the SD card resources and the newest
+versions will always be stored in the <a href=https://github.com/lindoran/HB63C09/tree/main/System_Roms/ROMS> ROMS </a> location
+at <repository location>HB63C09/System_Roms/ROMS/
+
 There are a few required Git submodules:
 
 - `beeb6809` – from my fork, mostly merged with the main repository  

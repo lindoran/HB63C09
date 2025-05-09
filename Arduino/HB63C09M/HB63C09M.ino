@@ -145,7 +145,7 @@ RAMWrite(42,0xFFFF);    //write the meaning of life.
 // its ram?
 if (RAMRead(0xFFFF) == 42) {
   Serial.println();
-  Serial.println(F("Welcome to the vBIOS Staging Enviornment..."));
+  Serial.println(F("Welcome to the vBIOS Staging Environment..."));
   Serial.println(F("Bootstrap Code loading at 0xFFC0...") );  
   
   loaderAddr = blockcopy_blks[0].start;
@@ -776,10 +776,10 @@ void loop(){
               
                 ioByteCnt++;                          // Increment the counter of the exchanged data bytes
                  
-             break;
+            break;
               
 
-              case 0x0A:
+            case 0x0A:
              /*NEW SOFT SECTOR FLOPPY ROUTINES
               * FLPSTA - Status register, returns a WD like drive error code           
               * 
@@ -795,7 +795,7 @@ void loop(){
               */
                busData = flpErr;
 
-               break;
+             break;
             
 
               case 0x3B:
@@ -918,7 +918,8 @@ void loop(){
                             loaderReg = 0; // re-lock the loader
                             curOp = 255;   // reset last op (this value makes certain a new operation is initiated.)
                             imgFile.close();  // close the file so we can open the floppy image.
-                    
+                            imgFile = SD.open(flpName,FILE_WRITE); // open floppy zero for random access. 
+                            
                             Serial.println(F("LOADER: Finished bootstrap"));
                             bitSet(DDRB, RES_);
                             bitClear(DDRB, RES_); // reset
