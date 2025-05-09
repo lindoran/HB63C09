@@ -61,6 +61,8 @@ You'll need the following tools installed:
 - `srecord` – https://srecord.sourceforge.net/
 - `flextools` - submodlue from this repo.  you will need to build and install flexfloppy from that repo.
 
+for beeb63C09 please read <a href=https://github.com/lindoran/beeb6809/blob/10a38aef71f9fb6d132f06f9216c55a9cf231e60/HOWTO_BUILD_SBC09.txt> HOW_TO_BUILD_SBC09 </a> 
+
 ---
 
 ## Notes on Building
