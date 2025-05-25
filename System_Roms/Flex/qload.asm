@@ -10,11 +10,11 @@
         * JUMPING TO LOCATION $C100
         *
         
-        * 6800 COMPATIBLITY MACROS:
-
-
         INCLUDE ./assist09/flex_bootstrap.sym
 
+
+        * 6800 COMPATIBLITY MACROS:
+       
         * TRANSFER A,B AND SET FLAGS
 TAB         MACRO
             TFR     A,B             

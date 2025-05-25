@@ -47,6 +47,8 @@ WARNING!!!
 #define F_CPU 20000000UL // may not be needed but we need to be sure board is 20Mhz
 
   
+// 100 ns delay at 20Mhz
+// 120 ns delay at 16Mhz
 
 #define DO_TWICE_NOP() \
 do { \
