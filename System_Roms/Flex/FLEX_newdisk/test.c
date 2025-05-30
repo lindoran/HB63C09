@@ -1,23 +1,28 @@
-#include <cmoc.h>
-#include "tinytypes.h"
+#include "fdos.h"
 #include "fbios.h"
-
-// placeholder for the main function
-
-
 
 
 int main() {
 
-    asm {
-        LDA #'A'
-        JSR [$D3EF]
-        
-    }
-    putChar('A'); // Example usage of outChar
-    exitFLEX(); // Example usage of exitFLEX
+      
+       char test[] = "hello world \r\n"; // Define a string to be printed
+       print("FLEX New Disk Test Program ");
+       println("Version 1.0");
+       print(test);
+       fputChar('A'); // Output a character to the console
+       pcrlf(); // Output a carriage return and line feed
+
+       while (getTerminalState()); // Wait for any key to be pressed 
+       char var = getCharNoEcho(); // Wait for a character without echo
+       foutHex(&var); // Output the variable as hex
+       pcrlf();      
+       outChar('A'); // Output a character to the console
+       pcrlf(); // Output a carriage return and line feed
 
 
+
+    // exit to flex
+    exitFLEX();
 
 
     return 0;

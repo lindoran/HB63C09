@@ -16,26 +16,26 @@
 
 
 // console io
-char getCharNoEcho();      // wait and return a character from the console without echo
-char getChar();            // wait and return a character from the console with echo
-bool getTerminalState();   // return 1 if a character is available
-void putChar(char c);      // output a character to the console
+asm char getCharNoEcho();     // wait and return a character from the console without echo
+asm char getChar();           // wait and return a character from the console with echo
+asm bool getTerminalState();  // return 1 if a character is available
+asm outChar(char c);      // output a character to the console
 
 // control flow
 asm exitMON();            // exit to the monitor
 asm exitFLEX();           // exit to the flex system (this is not part of the console package)
 
 // disk io
-uint8_t readSector(uint8_t track, uint8_t sector, uint16_t* buffer) ; // read a sector from the disk
-uint8_t writeSector(uint8_t track, uint8_t sector, uint16_t* buffer); // write a sector to the diskc
-bool verifySector(uint8_t* error);                                    // verify the last sector written       
-uint8_t rtzDrive(uint16_t* drive);                                    // reset the drive
-uint8_t setDrive(uint16_t* drive);                                    // set the current drive  
-bool chkDrive(uint16_t* drive, uint8_t* error);                       // check the current drive ready status
-bool quickCheckDrive(uint16_t* drive, uint8_t* error);                // check the current drive ready status without waiting        
+asm uint8_t readSector(uint8_t track, uint8_t sector, uint16_t* buffer) ; // read a sector from the disk
+asm uint8_t writeSector(uint8_t track, uint8_t sector, uint16_t* buffer); // write a sector to the diskc
+asm uint8_t verifySector();                                               // verify the last sector written       
+asm uint8_t rtzDrive(uint16_t* drive);                                    // reset the drive
+asm uint8_t setDrive(uint16_t* drive);                                    // set the current drive  
+asm uint8_t chkDrive(uint16_t* drive);                       // check the current drive ready status
+asm uint8_t quickCheckDrive(uint16_t* drive);                // check the current drive ready status without waiting        
 asm initDrive();                                                     // initialize the drive hardware 
 asm warmDrive();                                                     // warm start the drive hardware 
-uint8_t seekDrive(uint8_t track, uint8_t sector);                     // seek to the specified track and sector
+asm uint8_t seekDrive(uint8_t track, uint8_t sector);                     // seek to the specified track and sector
 
 
 #endif /* fbios_h */

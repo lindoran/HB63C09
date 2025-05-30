@@ -46,64 +46,46 @@
 
 
 
-
 // console io
 // (console io uses a table of addresses, we use inderect addressing)
 
 // wait and return a character from the console without echo
-char getCharNoEcho() {
-    char c; // hold the value of the character to return
- 
-        // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-        // have not quite worked how to do that.
-    
+asm char getCharNoEcho() {
     asm {
-            JSR [INCHNE]  ; call the input character no echo routine 
-            STA :c        ; store the character in c
-    }
-
-    return c;  
+            JSR [INCHNE]  // ; call the input character no echo routine 
+            TFR A,B       // ; store the character in b where cmoc expects the return value
+    } 
 }
 
 // wait and return a character from the console with echo
-char getChar() {
-    char c; // hold the value of the character to return
- 
-        // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-        // have not quite worked how to do that.
-    
+asm char getChar() {
     asm {
-            JSR [INCH]  ; call the input character routine
-            STA :c      ; store the character in c
+            JSR [INCH]  // ; call the input character routine
+            TFR A,B     // ; store the character in b where cmoc expects the return value
     }
-
-    return c;  
 }
 
 // return 'true' if a character is available
-bool getTerminalState() {
-    bool state = true; // hold the value of the state to return, we clean if a character is not waiting
- 
-    // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-    // have not quite worked how to do that.
-
-    asm {
+asm bool getTerminalState() {
+    asm { 
+            CLRB          ; asume there is no character waiting 'false'
             JSR [STATUS]  ; call the status routine
-            BNE ENDSTATE  ; if a character is waiting, branch to endstate  
-            CLR :state    ; no character wating clear to 'false' 
+            BEQ ENDSTATE  ; if no character is waiting, branch to endstate  
+            INCB          ; character wating set to 'true' 
         ENDSTATE:
     }
-    return state;
+
 }
 
 // output a character to the console
-void putChar(char c) {
+// note that we are pulling from 3,S this is because cmoc converts char into uint16_t 
+// when it pushes to the stack, so we need to pull from the lsb of the 16 bit value 
+// stored at 2,S.  OR we could have pulled 2,s into D and then Transfered B to A, but this is simpler.
+asm outChar(char c) {
     asm {
-            LDA :c        ; load the character to output
+            LDA 3,S       ; load the character to output into A.
             JSR [OUTCH]   ; call the output character routine
     }
-
-
 }
 
 // control flow
@@ -128,58 +110,42 @@ asm exitFLEX() {
 
 
 // read a sector from the disk
-uint8_t readSector(uint8_t track, uint8_t sector, uint16_t* buffer) {
-    uint8_t error = 0; // hold the value of the error to return
- 
-        // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-        // have not quite worked how to do that.
-
+asm uint8_t readSector(uint8_t track, uint8_t sector, uint16_t* buffer) {
     asm {
-           LDA :track     ; load the track number 
-           LDB :sector    ; load the sector number
-           LDX :buffer    ; load the buffer address
-           JSR READ       ; call the read routine 
-           STB :error     ; store the error code
+           LDA 3,S    ; load the track number 
+           LDB 5,S    ; load the sector number
+           LDX 6,S    ; load the buffer address
+           JSR READ   ; call the read routine 
+           
+           ;; error code is already in B, which is conviently the return value location
+           
     }
    
-    return error; // return the error code
     
 }
 
 // write a sector to the disk
-uint8_t writeSector(uint8_t track, uint8_t sector, uint16_t* buffer) {
-    uint8_t error = 0; // hold the value of the error to return
- 
-        // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-        // have not quite worked how to do that.
-
+asm uint8_t writeSector(uint8_t track, uint8_t sector, uint16_t* buffer) {
     asm {
-           LDA :track     ; load the track number 
-           LDB :sector    ; load the sector number
-           LDX :buffer    ; load the buffer address
+           LDA 3,S    ; load the track number 
+           LDB 5,S    ; load the sector number
+           LDX 6,S    ; load the buffer address
            JSR WRITE      ; call the write routine 
-           STB :error     ; store the error code
+           
+           ;; error code is already in B, which is conviently the return value location
     }
    
-    return error; // return the error code
 }
 
-// verify the last sector written true = verified, false = not verified error code returned in variable 'error'
+// verify, returns zero if no error, non zero if error exists
 
-bool verifySector(uint8_t* error) {
-    bool state = true; // hold the value of state of the verify to return
- 
-        // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-        // have not quite worked how to do that.
+asm uint8_t verifySector() {
     asm {
             JSR VERIFY    ; call the verify routine
-            BEQ ENDSTATE  ; if no error, branch to ENDVERIFY  
-            CLR :state    ; if an error exists clear to 'false'
-        ENDVERIFY:
-            STB :error    ; store the error code to variable 'error'
+            
+            ;; error code is already in B, which is conviently the return value location
     
     }
-    return state; // return the state of the verify
 }
 
 // RTZ the drive: variable 'drive' is the FCB for the drive to reset -- this is nebulus 
@@ -187,73 +153,47 @@ bool verifySector(uint8_t* error) {
 // or just a dummy variable that is 4 bytes long and the drive number is in the 4th byte
 // This function is the same on all the below that use the drive number.
 
-uint8_t rtzDrive(uint16_t* drive) {
-    uint8_t error = 0; // hold the value of the error to return
- 
-        // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-        // have not quite worked how to do that.
+asm uint8_t rtzDrive(uint16_t* drive) {
 
     asm {
-            LDX :drive     ; load the drive address
+            LDX 2,S        ; load the drive address
             JSR RESTORE    ; call the restore routine 
-            STB :error     ; store the error code
+            
+            ;; error code is already in B, which is conviently the return value location
     }
    
-    return error; // return the error code
 }
 
 // set the current drive
-uint8_t setDrive(uint16_t* drive) {
-    uint8_t error = 0; // hold the value of the error to return
- 
-        // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-        // have not quite worked how to do that.
-
+asm uint8_t setDrive(uint16_t* drive) {
     asm {
-            LDX :drive     ; load the drive address
+            LDX 2,S        ; load the drive address
             JSR DRIVE      ; call the set drive routine 
-            STB :error     ; store the error code
+          
+            ;; error code is already in B, which is conviently the return value location
     } 
-   
-    return error; // return the error code
+
 }
 
 // check the current drive ready status
-bool chkDrive(uint16_t* drive, uint8_t* error) {
-    bool state = true; // hold the value of the state to return
- 
-        // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-        // have not quite worked how to do that.
+asm uint8_t chkDrive(uint16_t* drive) {
     asm {
-            LDX :drive     ; load the drive address
+            LDX 2,S        ; load the drive address
             JSR CHKRDY     ; call the check drive routine 
-            BEQ ENDCHECK   ; if no error, branch to ENDCHECK
-            CLR :state     ; if an error exists clear to 'false'
-        ENDCHECK:
-            STB :error     ; store the error code to variable 'error'   
+         
+            ;; error code is already in B, which is conviently the return value location
 
     }   
-    return state; // return the state of the check
 }
 
 // check the current drive ready status without waiting
-bool quickCheckDrive(uint16_t* drive, uint8_t* error) {
-    bool state = true; // hold the value of the state to return
- 
-        // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-        // have not quite worked how to do that.
+asm uint8_t quickCheckDrive(uint16_t* drive) {
     asm {
-            LDX :drive     ; load the drive address
+            LDX 2,S        ; load the drive address
             JSR QUICK      ; call the quick check drive routine 
-            BEQ ENDQUICK   ; if no error, branch to ENDQUICK
-            CLR :state     ; if an error exists clear to 'false'
-        ENDQUICK:
-            STB :error     ; store the error code to variable 'error'   
-
+           
+            ;; error code is already in B, which is conviently the return value location
     }
-
-    
-    return state; // return the state of the check
 }
 
 // initialize the drive hardware from cold
@@ -272,18 +212,13 @@ asm warmDrive() {
 }
 
 // seek to the specified track and sector
-uint8_t seekDrive(uint8_t track, uint8_t sector) {
-    uint8_t error = 0; // hold the value of the error to return
- 
-        // this could be reworked to save the variable, by putting a in the return value locaiton on the stack.
-        // have not quite worked how to do that.
+asm uint8_t seekDrive(uint8_t track, uint8_t sector) {
     asm {
-            LDA :track     ; load the track number 
-            LDB :sector    ; load the sector number
+            LDA 3,S    ; load the track number 
+            LDB 5,S    ; load the sector number
             JSR SEEK       ; call the seek routine 
-            STB :error     ; store the error code
+
+            ;; error code is already in B, which is conviently the return value location
     }
     
-    return error; // return the error code
-
 }          
