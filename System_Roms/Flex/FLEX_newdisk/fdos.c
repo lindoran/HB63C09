@@ -6,6 +6,8 @@
 #define PSTRNG  0xCD1E   // pstring routine as defined in the advanced FLEX programmers guide
 #define OUTHEX  0xCD3C   // outhex routine as defined in the advanced FLEX programmers guide
 #define PCRLF   0xCD24   // pcrlf routine as defined in the advanced FLEX programmers guide
+#define CLASS   0xCD21   // class routine as defined in the advanced FLEX programmers guide
+#define NXTCH   0xCD27   // nxtch routine as defined in the advanced FLEX programmers guide
 
 // fputChar (character to output) - Outputs a character to the terminal or file.
 // Outputs a character using the FLEX PUTCHR routine ($CD18).
@@ -21,7 +23,7 @@
 // when it pushes to the stack, so we need to pull from the lsb of the 16 bit value 
 // stored at 2,S.  OR we could have pulled 2,s into D and then Transfered B to A, but this is simpler.
 
-asm fputChar(char c) {
+asm void fputChar(char c) {
     asm {
         LDA 3,S         // Load the character to output into register A
         JSR PUTCHR      // Call the putchr routine
@@ -36,7 +38,7 @@ asm fputChar(char c) {
 // - On exit, the Line Buffer Pointer points to the start of the buffer.
 // Caution: Using INBUFF will overwrite the command line buffer, which may disrupt DOS command processing.
 
-asm finBuf(void) {
+asm void finBuf(void) {
     asm {
         JSR INBUF       ; // Call the inbuf routine
     }
@@ -61,13 +63,13 @@ asm finBuf(void) {
 // this just runs untill its hit the null so its not memory safe either. 
 // if you pass any old character buffer its just going to run until it hits a null.
 
-asm print (const char *s) {
+asm void print (const char *s) {
     asm {
         LDX 2,s      ; load the address of the string to output
-    @loop:
+    pl:
         LDA ,x+      ; load the first character of the string
         JSR PUTCHR   ; call the putchr routine to output the character
-        BNE @loop    ; the character is not null, we keep going
+        BNE pl       ; the character is not null, we keep going
         
     }
 }
@@ -75,23 +77,45 @@ asm print (const char *s) {
 // outputs a string to the terminal to flex honnoring TTYSET parameters.
 // passes a lf/cr to the end of the string, all the same as the print function.
 
-asm println(const char *s) {
+asm void println(const char *s) {
     asm {
         LDX 2,s        ; // Load the address of the string to output
-    @loop:
+    pln:
         LDA ,x+        ; // Load the next character from the string
         JSR PUTCHR
-        BNE @loop      ; // If the character is not null, continue looping
+        BNE pln        ; // If the character is not null, continue looping
         JSR PCRLF      ; // Call the pcrlf routine to output a CR/LF
     }
 
 }
 
+// classify if character is a number or a letter and update system Last
+// terminator character. (this specifically changes the dos enviornment)
+// if a file is open or being read this could interfear with that.
+
+asm bool fchrClass(char ch) {
+    asm {
+        CLRB        ; start with b as false ie not a letter / number
+        LDA 3,s     ; get the lsb from 16 bit value from the stack
+        JSR CLASS   ; determine if a letter or a number,if so carry is cleared 
+        BCS cl      ; if c flag is set (this also updates the last terminator in the dos enviorntment)
+        INCB        ; return true if its a character 
+    cl:
+    }
+}
+
 // pcrlf - Outputs a carriage return and line feed to the terminal.
 
-asm pcrlf(void) {
+asm void pcrlf(void) {
     asm {
         JSR PCRLF       // Call the pcrlf routine to output a CR/LF
+    }
+}
+
+asm char fgetNext (void) {
+    asm {
+        JSR NXTCH       ; get next character
+        TFR A,B         ; place in B where cmoc expects return
     }
 }
 
@@ -101,7 +125,7 @@ asm pcrlf(void) {
 // with a larger variable, only the first byte will be output as hex. 
 
 
-asm foutHex(const void* var) {
+asm void foutHex(const void* var) {
     asm {
         LDX 2,s        // Load the address of the variable to output
         JSR OUTHEX      // Call the outhex routine

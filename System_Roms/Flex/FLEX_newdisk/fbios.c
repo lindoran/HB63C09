@@ -50,7 +50,7 @@
 // (console io uses a table of addresses, we use inderect addressing)
 
 // wait and return a character from the console without echo
-asm char getCharNoEcho() {
+asm char getCharNoEcho(void) {
     asm {
             JSR [INCHNE]  // ; call the input character no echo routine 
             TFR A,B       // ; store the character in b where cmoc expects the return value
@@ -58,7 +58,7 @@ asm char getCharNoEcho() {
 }
 
 // wait and return a character from the console with echo
-asm char getChar() {
+asm char getChar(void) {
     asm {
             JSR [INCH]  // ; call the input character routine
             TFR A,B     // ; store the character in b where cmoc expects the return value
@@ -66,7 +66,7 @@ asm char getChar() {
 }
 
 // return 'true' if a character is available
-asm bool getTerminalState() {
+asm bool getTerminalState(void) {
     asm { 
             CLRB          ; asume there is no character waiting 'false'
             JSR [STATUS]  ; call the status routine
@@ -81,7 +81,7 @@ asm bool getTerminalState() {
 // note that we are pulling from 3,S this is because cmoc converts char into uint16_t 
 // when it pushes to the stack, so we need to pull from the lsb of the 16 bit value 
 // stored at 2,S.  OR we could have pulled 2,s into D and then Transfered B to A, but this is simpler.
-asm outChar(char c) {
+asm void outChar(char c) {
     asm {
             LDA 3,S       ; load the character to output into A.
             JSR [OUTCH]   ; call the output character routine
@@ -91,14 +91,14 @@ asm outChar(char c) {
 // control flow
 
 // exit to the monitor
-asm exitMON() {
+asm void exitMON(void) {
     asm {
             JMP [MONITOR]  ; jump to the monitor address
     }
 }
 
 // exit to the flex system (this is not part of the console package)
-asm exitFLEX() {
+asm void exitFLEX(void) {
     asm{
            JMP FLEXRESET  ; jump to the flex reset address
     }
@@ -110,7 +110,7 @@ asm exitFLEX() {
 
 
 // read a sector from the disk
-asm uint8_t readSector(uint8_t track, uint8_t sector, uint16_t* buffer) {
+asm uint8_t readSector(uint8_t track, uint8_t sector, void* buffer) {
     asm {
            LDA 3,S    ; load the track number 
            LDB 5,S    ; load the sector number
@@ -125,7 +125,7 @@ asm uint8_t readSector(uint8_t track, uint8_t sector, uint16_t* buffer) {
 }
 
 // write a sector to the disk
-asm uint8_t writeSector(uint8_t track, uint8_t sector, uint16_t* buffer) {
+asm uint8_t writeSector(uint8_t track, uint8_t sector, void* buffer) {
     asm {
            LDA 3,S    ; load the track number 
            LDB 5,S    ; load the sector number
@@ -139,7 +139,7 @@ asm uint8_t writeSector(uint8_t track, uint8_t sector, uint16_t* buffer) {
 
 // verify, returns zero if no error, non zero if error exists
 
-asm uint8_t verifySector() {
+asm uint8_t verifySector(void) {
     asm {
             JSR VERIFY    ; call the verify routine
             
@@ -153,7 +153,7 @@ asm uint8_t verifySector() {
 // or just a dummy variable that is 4 bytes long and the drive number is in the 4th byte
 // This function is the same on all the below that use the drive number.
 
-asm uint8_t rtzDrive(uint16_t* drive) {
+asm uint8_t rtzDrive(void* drive) {
 
     asm {
             LDX 2,S        ; load the drive address
@@ -165,7 +165,7 @@ asm uint8_t rtzDrive(uint16_t* drive) {
 }
 
 // set the current drive
-asm uint8_t setDrive(uint16_t* drive) {
+asm uint8_t setDrive(void* drive) {
     asm {
             LDX 2,S        ; load the drive address
             JSR DRIVE      ; call the set drive routine 
@@ -176,7 +176,7 @@ asm uint8_t setDrive(uint16_t* drive) {
 }
 
 // check the current drive ready status
-asm uint8_t chkDrive(uint16_t* drive) {
+asm uint8_t chkDrive(void* drive) {
     asm {
             LDX 2,S        ; load the drive address
             JSR CHKRDY     ; call the check drive routine 
@@ -187,7 +187,7 @@ asm uint8_t chkDrive(uint16_t* drive) {
 }
 
 // check the current drive ready status without waiting
-asm uint8_t quickCheckDrive(uint16_t* drive) {
+asm uint8_t quickCheckDrive(void* drive) {
     asm {
             LDX 2,S        ; load the drive address
             JSR QUICK      ; call the quick check drive routine 
@@ -197,14 +197,14 @@ asm uint8_t quickCheckDrive(uint16_t* drive) {
 }
 
 // initialize the drive hardware from cold
-asm initDrive() {
+asm void initDrive(void) {
     asm {
             JSR INIT       ; call the initialize drive routine 
     }       
 }
 
 // warm start the drive hardware
-asm warmDrive() {
+asm void warmDrive(void) {
     asm {
             JSR WARM       ; call the warm start drive routine 
     }

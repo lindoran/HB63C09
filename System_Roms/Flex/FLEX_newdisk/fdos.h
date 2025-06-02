@@ -15,28 +15,31 @@
 
 // Outputs a character to the terminal or file.
 
-asm fputChar(char c);
+void fputChar(char c);
 
 // Inputs a line from the keyboard into the Line Buffer.
-asm finBuf(void);
+void finBuf(void);
 
 // outputs a string literal to flex honnoring TTYSET parameters.
 // does not support printf style formatting, but does support
 // c control characters such as \n and \r. does no formatting, 
 // just outputs the string as is with no trailing line feed or carrage 
 
-asm print(const char* str);
+void print(const char* str);
 
 // outputs a string to the terminal to flex honnoring TTYSET parameters.
 // passes a lf/cr to the end of the string, all the same as the print function.
 
-asm println(const char* str);
+void println(const char* str);
 
 // pcrlf - Outputs a carriage return and line feed to the terminal.
-asm pcrlf(void);
+void pcrlf(void);
+
+// get a character from the input buffer and update flex dos space.
+char fgetNext(void);
 
 // var contains the address of the variable to output as hex.
-asm foutHex(const void* var);
+void foutHex(const void* var);
 
 
 
