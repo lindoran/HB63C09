@@ -1,13 +1,14 @@
 #include "tinytypes.h"
 #include "fdos.h"
 
-#define PUTCHR  0xCD18   // putchr routine as defined in the advanced FLEX programmers guide
-#define INBUF   0xCD1B   // inbuf routine as defined in the advanced FLEX programmers guide
-#define PSTRNG  0xCD1E   // pstring routine as defined in the advanced FLEX programmers guide
-#define OUTHEX  0xCD3C   // outhex routine as defined in the advanced FLEX programmers guide
-#define PCRLF   0xCD24   // pcrlf routine as defined in the advanced FLEX programmers guide
-#define CLASS   0xCD21   // class routine as defined in the advanced FLEX programmers guide
-#define NXTCH   0xCD27   // nxtch routine as defined in the advanced FLEX programmers guide
+#define PUTCHR  0xCD18   // FLEX: Output a character to terminal or file
+#define INBUF   0xCD1B   // FLEX: Input a line from keyboard into line buffer
+#define CLASS   0xCD21   // FLEX: Classify character as alphanumeric or not
+#define PCRLF   0xCD24   // FLEX: Output carriage return and line feed
+#define NXTCH   0xCD27   // FLEX: Get next character from line buffer (skips spaces, handles EOL)
+
+#define OUTHEX  0xCD3C   // FLEX: Output an 8-bit value as hexadecimal
+
 
 // fputChar (character to output) - Outputs a character to the terminal or file.
 // Outputs a character using the FLEX PUTCHR routine ($CD18).
@@ -89,6 +90,7 @@ asm void println(const char *s) {
 
 }
 
+
 // classify if character is a number or a letter and update system Last
 // terminator character. (this specifically changes the dos enviornment)
 // if a file is open or being read this could interfear with that.
@@ -111,6 +113,22 @@ asm void pcrlf(void) {
         JSR PCRLF       // Call the pcrlf routine to output a CR/LF
     }
 }
+
+// fgetNext - Fetches the next character from the FLEX line buffer using the NXTCH routine.
+//
+// The NXTCH routine works as follows:
+// - The character in the "Current Character" location is copied to "Previous Character".
+// - The character pointed to by the Line Buffer Pointer is fetched from the Line Buffer and saved in "Current Character".
+// - Multiple spaces are skipped, so a sequence of spaces is treated as a single space.
+// - The Line Buffer Pointer is advanced to the next character, unless the fetched character is a RETURN (0x0D) or the TTYSET End-of-Line character.
+//   - If RETURN or EOL is encountered, repeated calls to NXTCH will continue to return the same character.
+// - NXTCH cannot cross into the next command in the buffer.
+// - On exit, NXTCH calls the CLASS routine to classify the character (alphanumeric or not).
+// - The fetched character is returned in register A (and B for CMOC).
+// - The carry flag is clear if the character is alphanumeric, set otherwise.
+// - Registers B and X are preserved.
+//
+// This function is typically used to sequentially read and parse command-line or file input from the FLEX system buffer.
 
 asm char fgetNext (void) {
     asm {
