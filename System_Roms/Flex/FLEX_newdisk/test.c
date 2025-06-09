@@ -7,7 +7,7 @@ int main() {
 
     char test[] = "hello world \r\n";
     print("FLEX New Disk Test Program ");
-    println("Version 1.0");
+    print("Version 1.0 \n");
     print(test);
     fputChar('A');
     pcrlf();
@@ -31,8 +31,8 @@ int main() {
     int i = 0;
     char ch;
 
-    print("Type a line and press RETURN:\r\n");
-    finBuf(); // Read a line into the FLEX system buffer
+    print("Type a line and press RETURN: ");
+    finBuffer(); // Read a line into the FLEX system buffer
 
     // Fetch characters from the buffer and build a C string
     while (i < 128) {
@@ -44,7 +44,8 @@ int main() {
     input[i] = '\0'; // Null-terminate the string
 
     print("You typed: ");
-    println(input);
+    print(input);
+    pcrlf();
     
     exitFLEX();
     return 0;

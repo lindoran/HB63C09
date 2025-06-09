@@ -19,7 +19,7 @@ typedef struct {
     uint8_t buffer[0x80];
 } flex_line_buffer_t;
 
-#define FLEX_LINE_BUFFER ((volatile flex_line_buffer_t*)0xC080)
+#define FLEX_LINE_BUFFER ((flex_line_buffer_t*)0xC080)
 
 // DOS memory map: $CC00-$CCFF
 typedef struct {
@@ -68,6 +68,6 @@ typedef struct {
     uint8_t  system_scratch4[0x08];  // $CCF8-$CCFF
 } flex_dos_memmap_t;
 
-#define FLEX_DOS_MEMMAP ((volatile flex_dos_memmap_t*)0xCC00)
+#define FLEX_DOS_MEMMAP ((flex_dos_memmap_t*)0xCC00)
 
 #endif /* FTYPES_H */

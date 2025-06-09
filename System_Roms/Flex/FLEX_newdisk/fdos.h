@@ -18,7 +18,7 @@
 void fputChar(char c);
 
 // Inputs a line from the keyboard into the Line Buffer.
-void finBuf(void);
+void finBuffer(void);
 
 // outputs a string literal to flex honnoring TTYSET parameters.
 // does not support printf style formatting, but does support
@@ -27,10 +27,6 @@ void finBuf(void);
 
 void print(const char* str);
 
-// outputs a string to the terminal to flex honnoring TTYSET parameters.
-// passes a lf/cr to the end of the string, all the same as the print function.
-
-void println(const char* str);
 
 // pcrlf - Outputs a carriage return and line feed to the terminal.
 void pcrlf(void);

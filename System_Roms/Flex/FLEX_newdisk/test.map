@@ -1,0 +1,211 @@
+Section: start (test.o) load at 0000, length 000E
+Section: code (crt.flex_o) load at 000E, length 00AE
+Section: code (copyMem.flex_o) load at 00BC, length 0017
+Section: code (test.o) load at 00D3, length 0129
+Section: code (fbios.o) load at 01FC, length 0067
+Section: code (fdos.o) load at 0263, length 0040
+Section: constructors_start (crt.flex_o) load at 02A3, length 0000
+Section: constructors_end (crt.flex_o) load at 02A3, length 0001
+Section: destructors_start (crt.flex_o) load at 02A4, length 0000
+Section: destructors_end (crt.flex_o) load at 02A4, length 0001
+Section: initgl_start (test.o) load at 02A5, length 0000
+Section: initgl (test.o) load at 02A5, length 0000
+Section: initgl (fbios.o) load at 02A5, length 0000
+Section: initgl (fdos.o) load at 02A5, length 0000
+Section: initgl_end (test.o) load at 02A5, length 0001
+Section: rodata (test.o) load at 02A6, length 0076
+Section: rodata (fbios.o) load at 031C, length 0000
+Section: rodata (fdos.o) load at 031C, length 0000
+Section: rwdata (test.o) load at 031C, length 0000
+Section: rwdata (fbios.o) load at 031C, length 0000
+Section: rwdata (fdos.o) load at 031C, length 0000
+Section: bss (crt.flex_o) load at 031C, length 000F
+Section: bss (test.o) load at 032B, length 0000
+Section: bss (fbios.o) load at 032B, length 0000
+Section: bss (fdos.o) load at 032B, length 0000
+Section: program_end (test.o) load at 032B, length 0000
+Symbol: \02bss (crt.flex_o) = 031C
+Symbol: \02bss (fbios.o) = 032B
+Symbol: \02bss (fdos.o) = 032B
+Symbol: \02bss (test.o) = 032B
+Symbol: \02code (copyMem.flex_o) = 00BC
+Symbol: \02code (crt.flex_o) = 000E
+Symbol: \02code (fbios.o) = 01FC
+Symbol: \02code (fdos.o) = 0263
+Symbol: \02code (test.o) = 00D3
+Symbol: \02constructors_end (crt.flex_o) = 02A3
+Symbol: \02constructors_start (crt.flex_o) = 02A3
+Symbol: \02destructors_end (crt.flex_o) = 02A4
+Symbol: \02destructors_start (crt.flex_o) = 02A4
+Symbol: \02initgl (fbios.o) = 02A5
+Symbol: \02initgl (fdos.o) = 02A5
+Symbol: \02initgl (test.o) = 02A5
+Symbol: \02initgl_end (test.o) = 02A5
+Symbol: \02initgl_start (test.o) = 02A5
+Symbol: \02program_end (test.o) = 032B
+Symbol: \02rodata (fbios.o) = 031C
+Symbol: \02rodata (fdos.o) = 031C
+Symbol: \02rodata (test.o) = 02A6
+Symbol: \02rwdata (fbios.o) = 031C
+Symbol: \02rwdata (fdos.o) = 031C
+Symbol: \02rwdata (test.o) = 031C
+Symbol: \02start (test.o) = 0000
+Symbol: @cond\014 (copyMem.flex_o) = 00CC
+Symbol: @done\0122 (crt.flex_o) = 001D
+Symbol: @loop\0122 (crt.flex_o) = 0017
+Symbol: @loop\014 (copyMem.flex_o) = 00C8
+Symbol: CHROUT (crt.flex_o) = 0326
+Symbol: ENDSTATE (fbios.o) = 0212
+Symbol: FLEXCL (crt.flex_o) = 0068
+Symbol: INILIB (crt.flex_o) = 000E
+Symbol: INISTK (crt.flex_o) = 031C
+Symbol: INITGL (test.o) = 02A5
+Symbol: L00030 (test.o) = 011D
+Symbol: L00031 (test.o) = 011D
+Symbol: L00033 (test.o) = 0190
+Symbol: L00034 (test.o) = 01C3
+Symbol: L00035 (test.o) = 01CB
+Symbol: S00024 (test.o) = 02A6
+Symbol: S00025 (test.o) = 02B5
+Symbol: S00026 (test.o) = 02D1
+Symbol: S00027 (test.o) = 02DF
+Symbol: S00028 (test.o) = 02F1
+Symbol: S00029 (test.o) = 0310
+Symbol: _chkDrive (fbios.o) = 0247
+Symbol: _exit (crt.flex_o) = 00B5
+Symbol: _exitFLEX (fbios.o) = 021F
+Symbol: _exitMON (fbios.o) = 021A
+Symbol: _fchrClass (fdos.o) = 0285
+Symbol: _fgetNext (fdos.o) = 0293
+Symbol: _finBuffer (fdos.o) = 0269
+Symbol: _foutHex (fdos.o) = 029D
+Symbol: _fputChar (fdos.o) = 0263
+Symbol: _frestoreIO (fdos.o) = 0299
+Symbol: _getChar (fbios.o) = 0203
+Symbol: _getCharNoEcho (fbios.o) = 01FC
+Symbol: _getTerminalState (fbios.o) = 020A
+Symbol: _initDrive (fbios.o) = 0253
+Symbol: _main (test.o) = 00D3
+Symbol: _outChar (fbios.o) = 0213
+Symbol: _pcrlf (fdos.o) = 028F
+Symbol: _print (fdos.o) = 0272
+Symbol: _quickCheckDrive (fbios.o) = 024D
+Symbol: _readSector (fbios.o) = 0223
+Symbol: _rtzDrive (fbios.o) = 023B
+Symbol: _seekDrive (fbios.o) = 025B
+Symbol: _setDrive (fbios.o) = 0241
+Symbol: _verifySector (fbios.o) = 0237
+Symbol: _warmDrive (fbios.o) = 0257
+Symbol: _writeSector (fbios.o) = 022D
+Symbol: bss_end (fbios.o) = 032B
+Symbol: bss_end (fdos.o) = 032B
+Symbol: bss_end (test.o) = 032B
+Symbol: bss_start (fbios.o) = 032B
+Symbol: bss_start (fdos.o) = 032B
+Symbol: bss_start (test.o) = 032B
+Symbol: cl (fdos.o) = 028E
+Symbol: constructors (crt.flex_o) = 02A3
+Symbol: copyMem (copyMem.flex_o) = 00BC
+Symbol: destructors (crt.flex_o) = 02A4
+Symbol: donef (crt.flex_o) = 00B4
+Symbol: end_of_sbrk_mem (crt.flex_o) = 0322
+Symbol: eolf (crt.flex_o) = 00A6
+Symbol: findArgEndf (crt.flex_o) = 007F
+Symbol: findArgStartf (crt.flex_o) = 0093
+Symbol: foundArgEndf (crt.flex_o) = 0089
+Symbol: funcend_chkDrive (fbios.o) = 024D
+Symbol: funcend_exitFLEX (fbios.o) = 0223
+Symbol: funcend_exitMON (fbios.o) = 021F
+Symbol: funcend_fchrClass (fdos.o) = 028F
+Symbol: funcend_fgetNext (fdos.o) = 0299
+Symbol: funcend_finBuffer (fdos.o) = 0272
+Symbol: funcend_foutHex (fdos.o) = 02A3
+Symbol: funcend_fputChar (fdos.o) = 0269
+Symbol: funcend_frestoreIO (fdos.o) = 029D
+Symbol: funcend_getChar (fbios.o) = 020A
+Symbol: funcend_getCharNoEcho (fbios.o) = 0203
+Symbol: funcend_getTerminalState (fbios.o) = 0213
+Symbol: funcend_initDrive (fbios.o) = 0257
+Symbol: funcend_main (test.o) = 01FC
+Symbol: funcend_outChar (fbios.o) = 021A
+Symbol: funcend_pcrlf (fdos.o) = 0293
+Symbol: funcend_print (fdos.o) = 0285
+Symbol: funcend_quickCheckDrive (fbios.o) = 0253
+Symbol: funcend_readSector (fbios.o) = 022D
+Symbol: funcend_rtzDrive (fbios.o) = 0241
+Symbol: funcend_seekDrive (fbios.o) = 0263
+Symbol: funcend_setDrive (fbios.o) = 0247
+Symbol: funcend_verifySector (fbios.o) = 023B
+Symbol: funcend_warmDrive (fbios.o) = 025B
+Symbol: funcend_writeSector (fbios.o) = 0237
+Symbol: funcsize_chkDrive (fbios.o) = 0202
+Symbol: funcsize_exitFLEX (fbios.o) = 0200
+Symbol: funcsize_exitMON (fbios.o) = 0201
+Symbol: funcsize_fchrClass (fdos.o) = 026D
+Symbol: funcsize_fgetNext (fdos.o) = 0269
+Symbol: funcsize_finBuffer (fdos.o) = 026C
+Symbol: funcsize_foutHex (fdos.o) = 0269
+Symbol: funcsize_fputChar (fdos.o) = 0269
+Symbol: funcsize_frestoreIO (fdos.o) = 0267
+Symbol: funcsize_getChar (fbios.o) = 0203
+Symbol: funcsize_getCharNoEcho (fbios.o) = 0203
+Symbol: funcsize_getTerminalState (fbios.o) = 0205
+Symbol: funcsize_initDrive (fbios.o) = 0200
+Symbol: funcsize_main (test.o) = 01FC
+Symbol: funcsize_outChar (fbios.o) = 0203
+Symbol: funcsize_pcrlf (fdos.o) = 0267
+Symbol: funcsize_print (fdos.o) = 0276
+Symbol: funcsize_quickCheckDrive (fbios.o) = 0202
+Symbol: funcsize_readSector (fbios.o) = 0206
+Symbol: funcsize_rtzDrive (fbios.o) = 0202
+Symbol: funcsize_seekDrive (fbios.o) = 0204
+Symbol: funcsize_setDrive (fbios.o) = 0202
+Symbol: funcsize_verifySector (fbios.o) = 0200
+Symbol: funcsize_warmDrive (fbios.o) = 0200
+Symbol: funcsize_writeSector (fbios.o) = 0206
+Symbol: isArgEndingCharf (crt.flex_o) = 00AE
+Symbol: l_bss (<synthetic>) = 000F
+Symbol: l_code (<synthetic>) = 0295
+Symbol: l_constructors_end (<synthetic>) = 0001
+Symbol: l_constructors_start (<synthetic>) = 0000
+Symbol: l_destructors_end (<synthetic>) = 0001
+Symbol: l_destructors_start (<synthetic>) = 0000
+Symbol: l_initgl (<synthetic>) = 0000
+Symbol: l_initgl_end (<synthetic>) = 0001
+Symbol: l_initgl_start (<synthetic>) = 0000
+Symbol: l_program_end (<synthetic>) = 0000
+Symbol: l_rodata (<synthetic>) = 0076
+Symbol: l_rwdata (<synthetic>) = 0000
+Symbol: l_start (<synthetic>) = 000E
+Symbol: main_return_address (test.o) = 0009
+Symbol: maxargcf (crt.flex_o) = 0016
+Symbol: nop_handler (crt.flex_o) = 00BB
+Symbol: null_ptr_handler (crt.flex_o) = 031E
+Symbol: p1 (fdos.o) = 0274
+Symbol: p2 (fdos.o) = 027F
+Symbol: program_break (crt.flex_o) = 0324
+Symbol: program_end (test.o) = 032B
+Symbol: program_start (test.o) = 0000
+Symbol: s_bss (<synthetic>) = 031C
+Symbol: s_code (<synthetic>) = 000E
+Symbol: s_constructors_end (<synthetic>) = 02A3
+Symbol: s_constructors_start (<synthetic>) = 02A3
+Symbol: s_destructors_end (<synthetic>) = 02A4
+Symbol: s_destructors_start (<synthetic>) = 02A4
+Symbol: s_initgl (<synthetic>) = 02A5
+Symbol: s_initgl_end (<synthetic>) = 02A5
+Symbol: s_initgl_start (<synthetic>) = 02A5
+Symbol: s_program_end (<synthetic>) = 032B
+Symbol: s_rodata (<synthetic>) = 02A6
+Symbol: s_rwdata (<synthetic>) = 031C
+Symbol: s_start (<synthetic>) = 0000
+Symbol: singlePrecisionSize (crt.flex_o) = 032A
+Symbol: stack_overflow_handler (crt.flex_o) = 0320
+Symbol: string_literals_end (fbios.o) = 031C
+Symbol: string_literals_end (fdos.o) = 031C
+Symbol: string_literals_end (test.o) = 031C
+Symbol: string_literals_start (fbios.o) = 031C
+Symbol: string_literals_start (fdos.o) = 031C
+Symbol: string_literals_start (test.o) = 02A6
+Symbol: unpackSingleAndConvertToASCII_dummy (crt.flex_o) = 0061
+Symbol: unpackSingleAndConvertToASCII_hook (crt.flex_o) = 0328

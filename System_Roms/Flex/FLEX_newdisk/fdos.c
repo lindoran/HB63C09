@@ -6,9 +6,10 @@
 #define CLASS   0xCD21   // FLEX: Classify character as alphanumeric or not
 #define PCRLF   0xCD24   // FLEX: Output carriage return and line feed
 #define NXTCH   0xCD27   // FLEX: Get next character from line buffer (skips spaces, handles EOL)
-
+#define RSTRIO  0xCD2A   // FLEX: Restore IO vectors for OUTCH, INCH, and File IO addresses to defalut
 #define OUTHEX  0xCD3C   // FLEX: Output an 8-bit value as hexadecimal
-
+#define NL      0x0A     // new line
+#define CR      0x0D     // carrage return
 
 // fputChar (character to output) - Outputs a character to the terminal or file.
 // Outputs a character using the FLEX PUTCHR routine ($CD18).
@@ -39,55 +40,51 @@ asm void fputChar(char c) {
 // - On exit, the Line Buffer Pointer points to the start of the buffer.
 // Caution: Using INBUFF will overwrite the command line buffer, which may disrupt DOS command processing.
 
-asm void finBuf(void) {
+asm void finBuffer(void) {
     asm {
         JSR INBUF       ; // Call the inbuf routine
+        LDA #NL         ; // we need to do a new line as we just echoed return
+        JSR PUTCHR      ; // lets put the new line in.
     }
 }
 
-// flex strings are very antiquated, whats worse they don't behave like C strings.
-// they use a 04 (EOT) character to terminate the string, and they do not use a null terminator.
-// in order to use c strings with flex, we need to use a set up that allows us to make use of string
-// literals, but also allows us to honor TTYSET parameters. -- this is the most basic way to do this.
+// FLEX strings are very antiquated; what's worse, they don't behave like C strings.
+// They use a 0x04 (EOT) character to terminate the string, and they do not use a null terminator.
+// In order to use C strings with FLEX, we need to use a setup that allows us to make use of string
+// literals, but also allows us to honor TTYSET parameters. -- This is the most basic way to do this.
 
-// buiding a framework to support flex strings as is is difficult and requires a lot of space.  
-// using c strings is the best solution as it allows the compiler to optimize the code better 
-// it allows for more natural use of strings the down side here is that we have to use a seprate 
-// set of functions to handle binary to integer and hex converstion.  as cmoc doese not support 
-// type detection within parameters like C11 this is what makes printf so BIG in CMOC.    
+// Building a framework to support FLEX strings as-is is difficult and requires a lot of space.
+// Using C strings is the best solution as it allows the compiler to optimize the code better.
+// It allows for more natural use of strings; the downside here is that we have to use a separate
+// set of functions to handle binary to integer and hex conversion. As CMOC does not support
+// type detection within parameters like C11, this is what makes printf so BIG in CMOC.
 
-// outputs a string literal to flex honnoring TTYSET parameters.
-// does not support printf style formatting, but does support
-// c control characters such as \n and \r. does no formatting, 
-// just outputs the string as is with no trailing line feed or carrage 
-// absolutly not thread safe, don't call from an interrupt while running.
-// this just runs untill its hit the null so its not memory safe either. 
-// if you pass any old character buffer its just going to run until it hits a null.
+// print (string)
+
+// Outputs a string literal to FLEX honoring TTYSET parameters.
+// Does not support printf-style formatting, but does support
+// C control characters such as \n. Just outputs the string as is with
+// no trailing line feed or carriage return unless you pass \n; it mimics
+// printf and passes CR as well.
+
+// Absolutely not thread safe, don't call from an interrupt while running.
+// This just runs until it's hit the null so it's not memory safe either.
+// If you pass any old character buffer it's just going to run until it hits a null.
 
 asm void print (const char *s) {
     asm {
-        LDX 2,s      ; load the address of the string to output
-    pl:
-        LDA ,x+      ; load the first character of the string
-        JSR PUTCHR   ; call the putchr routine to output the character
-        BNE pl       ; the character is not null, we keep going
-        
+        LDX  2,s      ; load the address of the string to output
+    p1: 
+        LDA  ,x+      ; load the first character of the string
+        CMPA #NL      ; if its a new line
+        BNE  p2       ; we have to print carrage return if not we skip and go on
+        LDA  #CR      ; some retro terminals really hate it the other way round
+        JSR  PUTCHR   ; print the carrage return
+        LDA  #NL      ; stage the new line
+    p2: JSR  PUTCHR   ; call the putchr routine to output the character
+        BNE  p1       ; the character is not null, we keep going
+
     }
-}
-
-// outputs a string to the terminal to flex honnoring TTYSET parameters.
-// passes a lf/cr to the end of the string, all the same as the print function.
-
-asm void println(const char *s) {
-    asm {
-        LDX 2,s        ; // Load the address of the string to output
-    pln:
-        LDA ,x+        ; // Load the next character from the string
-        JSR PUTCHR
-        BNE pln        ; // If the character is not null, continue looping
-        JSR PCRLF      ; // Call the pcrlf routine to output a CR/LF
-    }
-
 }
 
 
@@ -137,6 +134,14 @@ asm char fgetNext (void) {
     }
 }
 
+// Restore IO vectors (for completeness).
+asm void frestoreIO (void) {
+    asm {
+        JSR RSTRIO      ; restore io vectors
+    }
+}
+
+
 // foutHex (var) - Outputs the contents of an 8 bit variable as hexadecimal digits.
 // void type is used to minimize casting in this case, generally this expects a 
 // pointer to char or uint8_t, but can be used with any 8 bit variable. if used 
@@ -146,7 +151,7 @@ asm char fgetNext (void) {
 asm void foutHex(const void* var) {
     asm {
         LDX 2,s        // Load the address of the variable to output
-        JSR OUTHEX      // Call the outhex routine
+        JSR OUTHEX     // Call the outhex routine
     }
 
 
