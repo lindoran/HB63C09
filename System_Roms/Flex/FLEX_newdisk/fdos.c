@@ -8,6 +8,7 @@
 #define NXTCH   0xCD27   // FLEX: Get next character from line buffer (skips spaces, handles EOL)
 #define RSTRIO  0xCD2A   // FLEX: Restore IO vectors for OUTCH, INCH, and File IO addresses to defalut
 #define OUTHEX  0xCD3C   // FLEX: Output an 8-bit value as hexadecimal
+
 #define NL      0x0A     // new line
 #define CR      0x0D     // carrage return
 
