@@ -1,27 +1,66 @@
 #include "tinytypes.h"
 #include "fdos.h"
+#include "ftypes.h"
 
-#define PUTCHR  0xCD18   // FLEX: Output a character to terminal or file
+// Defines for internal routines, not meant to be used by user. These are here for 
+// testing, but will most likely cause bugs if used in a user program and so are not 
+// wrapped
+#define DINCH   0xCD09   // FLEX: Input a Character from the OS via the console
+#define DINCH2  0xCD0C   // FLEX: Input a character from the redirected source 
+#define DOUTCH  0xCD0F   // FLEX: Output a character from the OS via the console
+#define DOUTCH2 0xCD12   // FLEX: Output a character to the redirectable source 
+
+#define GETCHR  0xCD15   // FLEX: Get a character from the terminal or a file honors TTYSET
+#define PUTCHR  0xCD18   // FLEX: Output a character to terminal or file honors TTYSET
 #define INBUF   0xCD1B   // FLEX: Input a line from keyboard into line buffer
 #define CLASS   0xCD21   // FLEX: Classify character as alphanumeric or not
 #define PCRLF   0xCD24   // FLEX: Output carriage return and line feed
-#define NXTCH   0xCD27   // FLEX: Get next character from line buffer (skips spaces, handles EOL)
+#define NXTCH   0xCD27   // FLEX: Get next character from line buffer (skips spaces, handles EOL) update psudoregister (carry)
 #define RSTRIO  0xCD2A   // FLEX: Restore IO vectors for OUTCH, INCH, and File IO addresses to defalut
+#define OUTDEC  0xCD39   // FLEX: Output an 16-bit value as decimal, manages leading zeros
 #define OUTHEX  0xCD3C   // FLEX: Output an 8-bit value as hexadecimal
+#define GETHEX  0xCD42   // FLEX: Get hexadecimal number from line buffer, update psudoregister (b,x and carry)
+#define OUTADR  0xCD45   // FLEX: Output 16 bit Hexidecimal number
+#define INDEC   0xCD48   // FLEX: Input a decimal number.
 
 #define NL      0x0A     // new line
 #define CR      0x0D     // carrage return
+#define CCHPTR  0xCC18   // curent character pointer
+#define TTYEOL  0xCC02   // end of line separator from ttyset 
+
+flex_lastop_t flex_lastop;  // Pseudoregister structure for capturing FLEX operation results.
+                            // Used to store secondary return conditions from FLEX routines,
+                            // such as carry flag, register values, or other status info.
+                            // Typically updated by wrapper functions after system calls.
+
+
+// char fgetChar(void) -- return a character from source (terminal or file)
+//
+// This routine retrieves a single character, honoring all TTYSET parameters.
+// - The Current Line Number location is cleared by this call.
+// - If the "Input Switch" is non-zero, input is taken from INCH2 (redirected source).
+// - If "Input Switch" is zero, but "File Input Address" is non-zero, input is taken from the specified file.
+// - If both are zero, input is taken from the console via INCH.
+// - X and B registers are preserved.
+// - Preferred over INCH for general input, as it respects FLEX terminal and file redirection settings.
+
+asm char fgetChar(void) {
+    asm {
+            JSR GETCHR      // get a character place in a
+            TFR A,B         // return character in b (cmoc expects this)
+    }
+}
 
 // fputChar (character to output) - Outputs a character to the terminal or file.
+//
 // Outputs a character using the FLEX PUTCHR routine ($CD18).
-// - The character is passed in register A.
 // - Honors all TTYSET parameters (e.g., line length, escape key).
 // - If the "Special I/O Flag" is zero, manages column count and newlines.
 // - If using ACIA, checks for TTYSET Escape Character and pauses output if typed.
 // - If "Output Switch" is non-zero, sends the character via OUTCH2.
 // - If "File Output Address" is non-zero, writes the character to the specified file (via FCB).
 // - Otherwise, sends the character to the terminal using OUTCH (which can be redirected).
-// - Registers X and B are preserved.
+
 // note that we are pulling from 3,S this is because cmoc converts char into uint16_t 
 // when it pushes to the stack, so we need to pull from the lsb of the 16 bit value 
 // stored at 2,S.  OR we could have pulled 2,s into D and then Transfered B to A, but this is simpler.
@@ -127,11 +166,16 @@ asm void pcrlf(void) {
 // - Registers B and X are preserved.
 //
 // This function is typically used to sequentially read and parse command-line or file input from the FLEX system buffer.
+// updates the psudo register value - flex_lastop.carry 
 
 asm char fgetNext (void) {
     asm {
-        JSR NXTCH       ; get next character
-        TFR A,B         ; place in B where cmoc expects return
+        CLR  :flex_lastop.carry     ; no error (a character)
+        JSR  NXTCH                  ; get next character
+        BCC  fgn1                   ; check for error
+        INC  :flex_lastop.carry     ; theres an error (no character)
+    fgn1:    
+        TFR  A,B                    ; place in B where cmoc expects return
     }
 }
 
@@ -142,12 +186,23 @@ asm void frestoreIO (void) {
     }
 }
 
+// outputs a 16 bit unsigned number as an intiger, if spaces is zero (FALSE), printing
+// will start with first non zero number.  if spaces is non zero (TRUE) zeros will be
+// substituted for leading zeros.
+
+asm void foutDecimal(const void* var, bool spaces) { 
+    asm {
+        LDX 2,s     ; get the pointer address
+        LDB 5,s     ; get space operation
+        JSR OUTDEC  ; print the number
+
+    }
+}
 
 // foutHex (var) - Outputs the contents of an 8 bit variable as hexadecimal digits.
 // void type is used to minimize casting in this case, generally this expects a 
 // pointer to char or uint8_t, but can be used with any 8 bit variable. if used 
 // with a larger variable, only the first byte will be output as hex. 
-
 
 asm void foutHex(const void* var) {
     asm {
@@ -158,5 +213,104 @@ asm void foutHex(const void* var) {
 
 }
 
+// fgetHex reads a hexadecimal number from the FLEX line buffer using the GETHEX routine ($CD42).
+// - On entry, the Line Buffer Pointer should point to the first character of the number.
+// - On exit:
+//   - Carry is clear if a valid number was found.
+//   - Register B is nonzero if a number was found, zero if only a separator was found.
+//   - Register X contains the parsed value (0 if no number).
+//   - The Line Buffer Pointer is advanced past the separator (unless it's CR or EOL).
+//   - If a non-hex character is found, skips to the next separator and sets carry.
+// - The value is truncated to 16 bits (0..0xFFFF).
+// - Updates the flex_lastop pseudoregister. (carry, x and b)
+
+asm uint16_t fgetHex(void) {
+    asm {
+            CLR  :flex_lastop.carry     ; no error (a character)
+            JSR  GETHEX                 ; Get a hex number
+            BCC  fgh1
+            INC  :flex_lastop.carry     ; error (no character)
+    fgh1:   
+            STB  :flex_lastop.reg_b     ; save b for later
+            STX  :flex_lastop.reg_x     ; save x for later
+            TFR  X,D                    ; Transfer X (16-bit result) to D for CMOC return
+    }
+}
+
+
+// foutHex (var) - Outputs the contents of an 16 bit variable as hexadecimal digits.
+// void type is used to minimize casting in this case, generally this expects a 
+// pointer to uint16_t, but can be used with any 16 bit variable. if used 
+// with a smaller variable, it will output two bytes in sequence and the first
+// two hex digits will contain the value of the 8 bit type with the remaining 
+// two digits based on whatever physical data comes next.
+
+asm void foutLongHex(const void* var) {
+    asm {
+        LDX 2,S     ; load the address of variable to output
+        JSR OUTADR  ; output the 16 bit number at pointer
+    }
+}
+
+// fgetDec (void)
+// - On entry, the Line Buffer Pointer should point to the first character of the number.
+// - On exit:
+//   - Carry is clear if a valid number was found.
+//   - Register B is nonzero if a number was found, zero if only a separator was found.
+//   - Register X contains the parsed value (0 if no number).
+//   - The Line Buffer Pointer is advanced past the separator (unless it's CR or EOL).
+//   - If a non-hex character is found, skips to the next separator and sets carry.
+// - The value is truncated to 16 bits of presision (0..65535)
+// - Updates the flex_lastop pseudoregister. (carry, x and b)
+
+asm uint16_t fgetDec(void) {
+        asm {   
+            CLR  :flex_lastop.carry     ; no error (a character)
+            JSR  INDEC                  ; Get a decimal numberFLEX_DOS_MEMMAP->line_buffer_ptr
+            STB  :flex_lastop.reg_b     ; save b for later
+            STX  :flex_lastop.reg_x     ; save x for later
+            TFR  X,D                    ; Transfer X (16-bit result) to D for CMOC return
+        }
+}
+
+//void setLineBuffer(const char s*)
+//Loads the string into the start of the system buffer. resets the relivant pointers.
+// - destroys the system buffer
+// - sets the pointer at FLEX_DOSMEMMAP->line_buffer_ptr to 0xC080 in (ftypes.h as LBUFF)
+// - terminates line with CR (0x0D) for compatiblilty with DOCMND etc.. 
+// - this is as if the user entered a line with INBUFF but imports a c string literal.
+// - this replaces the final character in the string with a CR (which should stop most flex tolkinizers)
+
+asm void setLineBuffer(const char* s) {
+    asm {
+            LDY #LBUFF                              ; load x with the start of the line buffer 
+            STY CCHPTR                              ; store the buffer starting address into the pointer   
+            LDX 2,S                                 ; Get the string addres from the entry point
+    slb1:
+            LDA ,x+                                 ; get the character at x 
+            STA ,y+
+            BNE slb1                                ; if not zero keep going 
+            LDA #CR                                 ; terminator
+            STA -1,y                                ; terminate the string in the buffer with the TTY set separator
+    }   
+
+}
+
+// Copies the next token from the FLEX line buffer into a C string using NXTCH.
+// Stops at a separator or EOL as defined by FLEX.
+// dst must be large enough to hold the token plus a null terminator.
+
+asm void getLineToken(char* dst) {
+    asm {
+        LDX 2,S            ; X = destination buffer pointer (dst)
+    glt1:
+        JSR NXTCH          ; Get next character from FLEX buffer (A)
+        BCS glt2           ; If separator or EOL, stop
+        STA ,x+            ; Store character to destination
+        BRA glt1
+    glt2:
+        CLR ,x             ; Null-terminate the C string
+    }
+}
 
 

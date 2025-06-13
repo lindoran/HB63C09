@@ -11,15 +11,18 @@
  * Copyright (C) 2025 David Collins
  * 
  */
+ 
+#include "tinytypes.h"
 
- #include "tinytypes.h"
+#define LBUFF       0xC080  // start of line buffer
+#define SVARS       0xCC00  // start of system variables
 
 // Line buffer: $C080-$C0FF (128 bytes)
 typedef struct {
     uint8_t buffer[0x80];
 } flex_line_buffer_t;
 
-#define FLEX_LINE_BUFFER ((flex_line_buffer_t*)0xC080)
+#define FLEX_LINE_BUFFER ((flex_line_buffer_t*)LBUFF)
 
 // DOS memory map: $CC00-$CCFF
 typedef struct {
@@ -68,6 +71,6 @@ typedef struct {
     uint8_t  system_scratch4[0x08];  // $CCF8-$CCFF
 } flex_dos_memmap_t;
 
-#define FLEX_DOS_MEMMAP ((flex_dos_memmap_t*)0xCC00)
+#define FLEX_DOS_MEMMAP ((flex_dos_memmap_t*)SVARS)
 
 #endif /* FTYPES_H */
