@@ -1,4 +1,4 @@
- AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 1 - 08/25/2025 10:52:35 PM
+ AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 1 - 10/05/2024 08:47:48 PM
 
 
     1/   0 :                            ;; short block copy
@@ -61,7 +61,7 @@
    58/FFC3 : 10 8E 40 00                        ldy    #loader                  ; destination of loader code - 
    59/FFC7 : 10 86 00 08                        ldw    #((LstByt+2)-CopyBlock)  ; number of bytes into W 
    60/FFCB :                            
- AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 2 - 08/25/2025 10:52:35 PM
+ AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 2 - 10/05/2024 08:47:48 PM
 
 
    61/FFCB :                            ;;  we need to relocate the loader to the static block so we can load the rom space.
@@ -108,7 +108,7 @@
   102/FFEE :                            
   103/FFEE :                            
   104/FFEE :                            
- AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 3 - 08/25/2025 10:52:35 PM
+ AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 3 - 10/05/2024 08:47:48 PM
 
 
   Symbol Table (* = unused):
@@ -116,7 +116,7 @@
 
 *ARCHITECTURE :                                      "x86_64-unknown-linux" - |
 *CASESENSITIVE :                  0 - | *CONSTPI :     3.141592653589793239 - |
- COPYBLOCK :                   FFCB C | *DATE :                "08/25/2025" - |
+ COPYBLOCK :                   FFCB C | *DATE :                "10/05/2024" - |
 *FALSE :                          0 - | *FLOATMAX :   1.18973149535725E4932 - |
 *HAS64 :                          1 - | *LISTON :                         1 - |
  LOADER :                      4000 - |  LOADFM :                      A03E - |
@@ -124,13 +124,13 @@
 *MACEXP :                         7 - | *MOMCPU :                      6309 - |
 *MOMCPUNAME :                "6309" - | *NESTMAX :                      100 - |
 *PADDING :                        0 - | *PLAINBASE :                      0 - |
-*RELAXED :                        0 - | *TIME :               "10:52:35 PM" - |
+*RELAXED :                        0 - | *TIME :               "08:47:48 PM" - |
 *TRUE :                           1 - | *VERSION :                     142F - |
 
      23 symbols
      18 unused symbols
 
- AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 4 - 08/25/2025 10:52:35 PM
+ AS V1.42 Beta [Bld 277] - Source File blockcopy.asm - Page 4 - 10/05/2024 08:47:48 PM
 
 
   Code Pages:
@@ -140,7 +140,7 @@ STANDARD (0 changed characters)
 
 1 code page
 
-0.00 seconds assembly time
+0.01 seconds assembly time
 
     104 lines source file
       2 passes

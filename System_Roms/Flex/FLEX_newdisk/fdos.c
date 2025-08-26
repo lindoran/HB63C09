@@ -9,7 +9,7 @@
 #define DINCH2  0xCD0C   // FLEX: Input a character from the redirected source 
 #define DOUTCH  0xCD0F   // FLEX: Output a character from the OS via the console
 #define DOUTCH2 0xCD12   // FLEX: Output a character to the redirectable source 
-
+// wrapped defines 
 #define GETCHR  0xCD15   // FLEX: Get a character from the terminal or a file honors TTYSET
 #define PUTCHR  0xCD18   // FLEX: Output a character to terminal or file honors TTYSET
 #define INBUF   0xCD1B   // FLEX: Input a line from keyboard into line buffer
@@ -22,7 +22,7 @@
 #define GETHEX  0xCD42   // FLEX: Get hexadecimal number from line buffer, update psudoregister (b,x and carry)
 #define OUTADR  0xCD45   // FLEX: Output 16 bit Hexidecimal number
 #define INDEC   0xCD48   // FLEX: Input a decimal number.
-
+// macros
 #define NL      0x0A     // new line
 #define CR      0x0D     // carrage return
 #define CCHPTR  0xCC18   // curent character pointer
@@ -291,7 +291,7 @@ asm void setLineBuffer(const char* s) {
             STA ,y+
             BNE slb1                                ; if not zero keep going 
             LDA #CR                                 ; terminator
-            STA -1,y                                ; terminate the string in the buffer with the TTY set separator
+            STA ,-y                                 ; terminate the string in the buffer with CR
     }   
 
 }

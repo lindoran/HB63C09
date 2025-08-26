@@ -1,4 +1,9 @@
- AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 1 - 08/25/2025 10:52:35 PM
+#ifndef _blockcopy_H
+#define _blockcopy_H
+
+/*
+blockcopy.asm listing below for reference, please see the c code below the comments
+ AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 1 - 10/22/2024 11:12:01 AM
 
 
     1/   0 :                            ;; short block copy
@@ -61,7 +66,7 @@
    58/FFC3 : 10 8E 40 00                        ldy    #loader                  ; destination of loader code - 
    59/FFC7 : 10 86 00 08                        ldw    #((LstByt+2)-CopyBlock)  ; number of bytes into W 
    60/FFCB :                            
- AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 2 - 08/25/2025 10:52:35 PM
+ AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 2 - 10/22/2024 11:12:01 AM
 
 
    61/FFCB :                            ;;  we need to relocate the loader to the static block so we can load the rom space.
@@ -108,7 +113,7 @@
   102/FFEE :                            
   103/FFEE :                            
   104/FFEE :                            
- AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 3 - 08/25/2025 10:52:35 PM
+ AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 3 - 10/22/2024 11:12:01 AM
 
 
   Symbol Table (* = unused):
@@ -116,7 +121,7 @@
 
 *ARCHITECTURE :                                      "x86_64-unknown-linux" - |
 *CASESENSITIVE :                  0 - | *CONSTPI :     3.141592653589793239 - |
- COPYBLOCK :                   FFCB C | *DATE :                "08/25/2025" - |
+ COPYBLOCK :                   FFCB C | *DATE :                "10/22/2024" - |
 *FALSE :                          0 - | *FLOATMAX :   1.18973149535725E4932 - |
 *HAS64 :                          1 - | *LISTON :                         1 - |
  LOADER :                      4000 - |  LOADFM :                      A03E - |
@@ -124,13 +129,13 @@
 *MACEXP :                         7 - | *MOMCPU :                      6309 - |
 *MOMCPUNAME :                "6309" - | *NESTMAX :                      100 - |
 *PADDING :                        0 - | *PLAINBASE :                      0 - |
-*RELAXED :                        0 - | *TIME :               "10:52:35 PM" - |
+*RELAXED :                        0 - | *TIME :               "11:12:01 AM" - |
 *TRUE :                           1 - | *VERSION :                     142F - |
 
      23 symbols
      18 unused symbols
 
- AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 4 - 08/25/2025 10:52:35 PM
+ AS V1.42 Beta [Bld 278] - Source File blockcopy.asm - Page 4 - 10/22/2024 11:12:01 AM
 
 
   Code Pages:
@@ -146,3 +151,29 @@ STANDARD (0 changed characters)
       2 passes
       0 errors
       0 warnings
+*/
+
+#define blockcopy_start 0x0000FFC0ul
+#define blockcopy_len 0x0000002Eu
+#define blockcopy_end 0x0000FFEDul
+static const unsigned char blockcopy_data[] =
+{
+  0x8e,0xff,0xcb,0x10,0x8e,0x40,0x00,0x10,0x86,0x00,0x08,0xa6,0x80,0xa7,0xa0,0x10,
+  0x5a,0x26,0xf8,0x8e,0xa0,0x3e,0x86,0xff,0xa7,0x84,0xa6,0x84,0xe6,0x84,0x1f,0x02,
+  0x11,0xa6,0x84,0x11,0xe6,0x84,0x86,0x84,0xb7,0x40,0x01,0x7e,0x40,0x00
+};
+
+typedef struct
+{
+  const char *data;
+  unsigned long start;
+  unsigned long end;
+  unsigned len;
+} blockcopy_blk;
+static const blockcopy_blk blockcopy_blks[] =
+{
+  { blockcopy_data, blockcopy_start, blockcopy_end, blockcopy_len },
+  { 0, 0, 0, 0 }
+};
+
+#endif /* _blockcopy_H */
